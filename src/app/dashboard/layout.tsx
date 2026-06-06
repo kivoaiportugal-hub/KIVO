@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { APP_NAME } from "@/lib/constants";
 
 export const metadata: Metadata = {
   title: "Dashboard",
 };
 
 const navigation = [
-  { name: "Home", href: "/dashboard", icon: "🏠" },
+  { name: "Home", href: "/dashboard/home", icon: "🏠" },
   { name: "AI Assistant", href: "/dashboard/assistant", icon: "🤖" },
   { name: "Performance", href: "/dashboard/performance", icon: "📊" },
   { name: "Menu Intel", href: "/dashboard/menu", icon: "🍔" },
@@ -31,10 +30,10 @@ export default function DashboardLayout({
       {/* Sidebar */}
       <aside className="hidden w-64 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground lg:flex">
         <div className="flex h-14 items-center border-b px-4">
-          <Link href="/dashboard" className="flex items-center gap-2">
+          <Link href="/dashboard/home" className="flex items-center gap-2">
             <span className="text-xl font-bold">
-              <span className="text-sidebar-primary-foreground">K</span>
-              <span className="text-sidebar-foreground/80">ivo</span>
+              <span className="text-primary">K</span>
+              <span className="text-foreground/80">ivo</span>
             </span>
           </Link>
         </div>
@@ -43,7 +42,7 @@ export default function DashboardLayout({
             <Link
               key={item.name}
               href={item.href}
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
             >
               <span>{item.icon}</span>
               <span>{item.name}</span>
@@ -52,14 +51,12 @@ export default function DashboardLayout({
         </nav>
         <div className="border-t p-3">
           <div className="flex items-center gap-3 rounded-md px-3 py-2 text-sm">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sidebar-primary text-xs font-bold text-sidebar">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
               U
             </div>
             <div className="flex-1 truncate">
-              <div className="font-medium text-sidebar-foreground">
-                Utilizador
-              </div>
-              <div className="text-xs text-sidebar-foreground/60">
+              <div className="font-medium">Utilizador</div>
+              <div className="text-xs text-muted-foreground">
                 Plano: Start
               </div>
             </div>

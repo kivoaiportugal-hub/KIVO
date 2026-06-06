@@ -1,4 +1,4 @@
-export default function DashboardPage() {
+export default function DashboardHomePage() {
   return (
     <div className="flex-1 space-y-6 p-6">
       <div className="flex items-center justify-between">
@@ -68,9 +68,7 @@ export default function DashboardPage() {
             🎯
           </div>
           <div className="flex-1">
-            <div className="text-sm font-semibold">
-              Next Best Action
-            </div>
+            <div className="text-sm font-semibold">Next Best Action</div>
             <p className="mt-1 text-sm text-muted-foreground">
               Ativar promoção de 10% no menu burger (19h–21h). Impacto estimado:
               +€120/semana.
@@ -97,25 +95,19 @@ export default function DashboardPage() {
           <div className="flex items-center gap-3 rounded-lg border bg-card p-3 text-sm shadow-sm">
             <span className="text-red-500">⚠️</span>
             <span className="flex-1">Chicken Burger perdeu 25% vendas</span>
-            <button className="text-xs text-primary hover:underline">
-              Ver
-            </button>
+            <button className="text-xs text-primary hover:underline">Ver</button>
           </div>
           <div className="flex items-center gap-3 rounded-lg border bg-card p-3 text-sm shadow-sm">
             <span className="text-yellow-500">⚠️</span>
             <span className="flex-1">
               Avaliações negativas aumentaram 15%
             </span>
-            <button className="text-xs text-primary hover:underline">
-              Ver
-            </button>
+            <button className="text-xs text-primary hover:underline">Ver</button>
           </div>
           <div className="flex items-center gap-3 rounded-lg border bg-card p-3 text-sm shadow-sm">
             <span className="text-green-500">📈</span>
             <span className="flex-1">Bolt Food +20% esta semana</span>
-            <button className="text-xs text-primary hover:underline">
-              Ver
-            </button>
+            <button className="text-xs text-primary hover:underline">Ver</button>
           </div>
         </div>
       </div>
