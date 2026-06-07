@@ -75,32 +75,57 @@ export function OnboardingWizard() {
       const score = calculateMaturityScore(data);
       const recommendedPlan = getRecommendedPlan(score);
 
-      const { error: updateError } = await supabase.auth.updateUser({
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setError("Utilizador não autenticado.");
+        setSaving(false);
+        return;
+      }
+
+      // Save to restaurants table
+      const { error: restaurantError } = await supabase.from("restaurants").upsert(
+        {
+          user_id: user.id,
+          name: data.restaurantName,
+          cuisine_type: data.cuisineType,
+          city: data.city,
+          platforms: data.platforms,
+          daily_orders: data.dailyOrders,
+          monthly_revenue: data.monthlyRevenue ? Number(data.monthlyRevenue) : null,
+          avg_ticket: data.avgTicket ? Number(data.avgTicket) : null,
+          team_size: data.teamSize,
+          has_delivery_manager: data.hasDeliveryManager,
+          challenges: data.challenges,
+          onboarding_score: score,
+          onboarding_plan: recommendedPlan,
+          onboarding_completed: true,
+        },
+        { onConflict: "user_id" }
+      );
+
+      if (restaurantError) {
+        console.error("Restaurant save error:", restaurantError);
+        setError("Erro ao guardar restaurante: " + restaurantError.message);
+        setSaving(false);
+        return;
+      }
+
+      // Also update user metadata for quick access
+      await supabase.auth.updateUser({
         data: {
           onboarding_completed: true,
           onboarding_score: score,
           onboarding_plan: recommendedPlan,
           restaurant_name: data.restaurantName,
-          cuisine_type: data.cuisineType,
-          city: data.city,
-          platforms: data.platforms,
-          daily_orders: data.dailyOrders,
-          monthly_revenue: data.monthlyRevenue,
-          avg_ticket: data.avgTicket,
-          team_size: data.teamSize,
-          has_delivery_manager: data.hasDeliveryManager,
-          challenges: data.challenges,
         },
       });
 
-      if (updateError) {
-        setError(updateError.message);
-        setSaving(false);
-        return;
-      }
-
       window.location.href = "/dashboard/home";
-    } catch {
+    } catch (err) {
+      console.error("Onboarding error:", err);
       setError("Erro ao guardar. Tenta novamente.");
       setSaving(false);
     }

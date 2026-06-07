@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 interface Message {
   role: "user" | "assistant";
@@ -8,20 +9,52 @@ interface Message {
 }
 
 export function ChatInterface() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: "assistant",
-      content:
-        "Olá! Sou o Kivo, o teu agente AI de delivery. Pergunta-me sobre vendas, preços, promoções, avaliações ou qualquer coisa relacionada com o teu restaurante. Como posso ajudar?",
-    },
-  ]);
+  const supabase = createClient();
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Load chat history on mount
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        const { data } = await supabase
+          .from("chat_messages")
+          .select("role, content")
+          .order("created_at", { ascending: true })
+          .limit(50);
+
+        if (data && data.length > 0) {
+          setMessages(data as Message[]);
+        } else {
+          setMessages([
+            {
+              role: "assistant",
+              content:
+                "Olá! Sou o Kivo, o teu agente AI de delivery. Pergunta-me sobre vendas, preços, promoções, avaliações ou qualquer coisa relacionada com o teu restaurante. Como posso ajudar?",
+            },
+          ]);
+        }
+      } catch {
+        // Table might not exist yet
+        setMessages([
+          {
+            role: "assistant",
+            content:
+              "Olá! Sou o Kivo, o teu agente AI de delivery. Pergunta-me sobre vendas, preços, promoções, avaliações ou qualquer coisa relacionada com o teu restaurante. Como posso ajudar?",
+          },
+        ]);
+      }
+      setLoadingHistory(false);
+    };
+    loadHistory();
+  }, []);
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
@@ -30,6 +63,16 @@ export function ChatInterface() {
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
+
+    // Save user message to Supabase
+    try {
+      await supabase.from("chat_messages").insert({
+        role: "user",
+        content: userMessage.content,
+      });
+    } catch {
+      // Table might not exist yet — continue anyway
+    }
 
     try {
       const response = await fetch("/api/ai/chat", {
@@ -86,6 +129,18 @@ export function ChatInterface() {
           }
         }
       }
+
+      // Save assistant message to Supabase
+      if (assistantContent) {
+        try {
+          await supabase.from("chat_messages").insert({
+            role: "assistant",
+            content: assistantContent,
+          });
+        } catch {
+          // Table might not exist yet
+        }
+      }
     } catch {
       setMessages((prev) => [
         ...prev.slice(0, -1),
@@ -105,6 +160,29 @@ export function ChatInterface() {
       sendMessage();
     }
   };
+
+  const clearChat = async () => {
+    setMessages([
+      {
+        role: "assistant",
+        content:
+          "Olá! Sou o Kivo, o teu agente AI de delivery. Pergunta-me sobre vendas, preços, promoções, avaliações ou qualquer coisa relacionada com o teu restaurante. Como posso ajudar?",
+      },
+    ]);
+    try {
+      await supabase.from("chat_messages").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    } catch {
+      // Table might not exist yet
+    }
+  };
+
+  if (loadingHistory) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-sm text-muted-foreground">A carregar...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -167,6 +245,25 @@ export function ChatInterface() {
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+              />
+            </svg>
+          </button>
+          <button
+            onClick={clearChat}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md border text-muted-foreground hover:bg-accent"
+            title="Limpar conversa"
+          >
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
               />
             </svg>
           </button>

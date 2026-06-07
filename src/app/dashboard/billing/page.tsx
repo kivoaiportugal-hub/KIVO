@@ -1,40 +1,73 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useSubscription } from "@/features/billing/subscription-provider";
 import { PLANS } from "@/lib/constants";
 import type { PlanId } from "@/lib/constants";
 
+interface Subscription {
+  plan_id: PlanId;
+  status: string;
+  interval: string;
+  current_period_end: string;
+  trial_end: string | null;
+}
+
 export default function BillingPage() {
-  const { subscription, plan, isActive, isTrialing, loading, refresh } =
-    useSubscription();
   const supabase = createClient();
-  const [selectedPlan, setSelectedPlan] = useState<PlanId>(plan);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [loading, setLoading] = useState(true);
   const [interval, setInterval] = useState<"monthly" | "yearly">("monthly");
   const [creating, setCreating] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState<PlanId>("start");
+
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      const planFromMeta = user.user_metadata?.onboarding_plan as PlanId;
+      if (planFromMeta) {
+        setCurrentPlan(planFromMeta);
+      }
+
+      const { data } = await supabase
+        .from("subscriptions")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (data) {
+        setSubscription(data as Subscription);
+      }
+      setLoading(false);
+    };
+
+    fetchSubscription();
+  }, []);
 
   const handleCheckout = async (planId: PlanId) => {
     setCreating(true);
-    setSelectedPlan(planId);
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) return;
-
-    const response = await fetch("/api/billing/checkout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ planId, interval }),
-    });
-
-    const data = await response.json();
-    if (data.url) {
-      window.location.href = data.url;
+    try {
+      const response = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId, interval }),
+      });
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch {
+      setCreating(false);
     }
-    setCreating(false);
   };
 
   const handlePortal = async () => {
@@ -84,13 +117,15 @@ export default function BillingPage() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold">Plano Atual</h3>
-              <p className="text-2xl font-bold">{PLANS[plan]?.name || "Free"}</p>
-              {isTrialing && trialEndDate && (
+              <p className="text-2xl font-bold">
+                {PLANS[subscription.plan_id]?.name || "Free"}
+              </p>
+              {subscription.status === "trialing" && trialEndDate && (
                 <p className="text-sm text-muted-foreground">
                   Trial termina em {trialEndDate}
                 </p>
               )}
-              {isActive && periodEndDate && (
+              {subscription.status === "active" && periodEndDate && (
                 <p className="text-sm text-muted-foreground">
                   Renova em {periodEndDate}
                 </p>
@@ -99,18 +134,18 @@ export default function BillingPage() {
             <div className="flex gap-2">
               <span
                 className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                  isActive
+                  subscription.status === "active"
                     ? "bg-green-100 text-green-800"
-                    : isTrialing
+                    : subscription.status === "trialing"
                       ? "bg-blue-100 text-blue-800"
                       : subscription.status === "past_due"
                         ? "bg-red-100 text-red-800"
                         : "bg-gray-100 text-gray-800"
                 }`}
               >
-                {isActive
+                {subscription.status === "active"
                   ? "Ativo"
-                  : isTrialing
+                  : subscription.status === "trialing"
                     ? "Em trial"
                     : subscription.status === "past_due"
                       ? "Pagamento pendente"
@@ -127,8 +162,26 @@ export default function BillingPage() {
         </div>
       )}
 
+      {/* Trial banner for free users */}
+      {!subscription && (
+        <div className="rounded-lg border-2 border-primary/20 bg-primary/5 p-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
+              🎉
+            </div>
+            <div>
+              <div className="font-semibold">Começa o teu trial grátis!</div>
+              <div className="text-sm text-muted-foreground">
+                14 dias grátis, sem cartão de crédito. Escolhe um plano para
+                começar.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Interval toggle */}
-      <div className="flex items-center justify-center gap-1 rounded-lg border bg-muted p-1 w-fit">
+      <div className="flex items-center justify-center gap-1 rounded-lg border bg-muted p-1 w-fit mx-auto">
         <button
           onClick={() => setInterval("monthly")}
           className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
@@ -156,7 +209,7 @@ export default function BillingPage() {
       <div className="grid gap-4 md:grid-cols-3">
         {(Object.entries(PLANS) as [PlanId, (typeof PLANS)[PlanId]][]).map(
           ([id, planData]) => {
-            const isCurrent = plan === id;
+            const isCurrent = subscription?.plan_id === id || (!subscription && currentPlan === id && id === "start");
             const price =
               interval === "yearly" ? planData.priceYearly : planData.price;
             const periodPrice =
@@ -189,7 +242,8 @@ export default function BillingPage() {
                   <span className="text-sm text-muted-foreground">/mês</span>
                   {interval === "yearly" && (
                     <p className="text-xs text-muted-foreground">
-                      €{price}/ano (poupas €{(planData.price * 12 - planData.priceYearly)})
+                      €{price}/ano (poupas €
+                      {planData.price * 12 - planData.priceYearly})
                     </p>
                   )}
                 </div>

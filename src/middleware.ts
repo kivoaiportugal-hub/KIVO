@@ -30,8 +30,24 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
-  const onboardingCompleted = user?.user_metadata?.onboarding_completed === true;
   const isOnboarding = pathname === "/dashboard/onboarding";
+  const isDashboard = pathname.startsWith("/dashboard");
+  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/register");
+
+  // Check onboarding status from restaurants table
+  let onboardingCompleted = user?.user_metadata?.onboarding_completed === true;
+
+  if (user && !onboardingCompleted) {
+    const { data: restaurant } = await supabase
+      .from("restaurants")
+      .select("onboarding_completed")
+      .eq("user_id", user.id)
+      .single();
+
+    if (restaurant?.onboarding_completed) {
+      onboardingCompleted = true;
+    }
+  }
 
   // Redirect authenticated users from root to dashboard (or onboarding)
   if (user && pathname === "/") {
@@ -41,14 +57,14 @@ export async function middleware(request: NextRequest) {
   }
 
   // Protected routes: redirect to login if not authenticated
-  if (!user && pathname.startsWith("/dashboard")) {
+  if (!user && isDashboard) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
   // Redirect to onboarding if not completed (but allow onboarding route itself)
-  if (user && pathname.startsWith("/dashboard") && !isOnboarding && !onboardingCompleted) {
+  if (user && isDashboard && !isOnboarding && !onboardingCompleted) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard/onboarding";
     return NextResponse.redirect(url);
@@ -62,10 +78,6 @@ export async function middleware(request: NextRequest) {
   }
 
   // Redirect authenticated users away from auth pages
-  const isAuthRoute =
-    pathname.startsWith("/login") ||
-    pathname.startsWith("/register");
-
   if (user && isAuthRoute) {
     const url = request.nextUrl.clone();
     url.pathname = onboardingCompleted ? "/dashboard/home" : "/dashboard/onboarding";
@@ -77,6 +89,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|auth/callback|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|auth/callback|api/.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
