@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const session = await getStripe().billingPortal.sessions.create({
+    const session = await (await getStripe()).billingPortal.sessions.create({
       customer: subscription.stripe_customer_id,
       return_url: `${process.env.NEXT_PUBLIC_APP_URL || "https://kivo.ai"}/dashboard/billing`,
     });

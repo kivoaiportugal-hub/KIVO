@@ -1,8 +1,6 @@
-import Stripe from "stripe";
+let _stripe: any = null;
 
-let _stripe: Stripe | null = null;
-
-export function getStripe(): Stripe {
+export async function getStripe() {
   if (!_stripe) {
     const key = process.env.STRIPE_SECRET_KEY;
     if (!key) {
@@ -10,6 +8,7 @@ export function getStripe(): Stripe {
         "STRIPE_SECRET_KEY is not configured. Add it in Vercel → Settings → Environment Variables."
       );
     }
+    const { default: Stripe } = await import("stripe");
     _stripe = new Stripe(key, {
       apiVersion: "2026-05-27.dahlia",
       typescript: true,
@@ -17,13 +16,6 @@ export function getStripe(): Stripe {
   }
   return _stripe;
 }
-
-// Keep backward compatibility
-export const stripe = new Proxy({} as Stripe, {
-  get(_, prop) {
-    return (getStripe() as any)[prop];
-  },
-});
 
 export function getStripePublishableKey() {
   return process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!;

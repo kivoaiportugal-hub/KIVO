@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
   let event: any;
 
   try {
-    event = getStripe().webhooks.constructEvent(body, signature, webhookSecret);
+    event = (await getStripe()).webhooks.constructEvent(body, signature, webhookSecret);
   } catch (err) {
     console.error("Webhook signature verification failed:", err);
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
         const interval = session.metadata?.interval;
 
         if (userId && session.subscription) {
-          const subscription = await getStripe().subscriptions.retrieve(
+          const subscription = await (await getStripe()).subscriptions.retrieve(
             session.subscription as string
           );
 
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
       case "invoice.payment_failed": {
         const invoice = event.data.object;
         if (invoice.subscription) {
-          const subscription = await getStripe().subscriptions.retrieve(
+          const subscription = await (await getStripe()).subscriptions.retrieve(
             invoice.subscription as string
           );
           const userId = subscription.metadata?.user_id;

@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
   let customerId = existing?.stripe_customer_id;
 
   if (!customerId) {
-    const customer = await getStripe().customers.create({
+    const customer = await (await getStripe()).customers.create({
       email: user.email!,
       metadata: { user_id: user.id },
     });
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const session = await getStripe().checkout.sessions.create({
+  const session = await (await getStripe()).checkout.sessions.create({
     customer: customerId,
     mode: "subscription",
     payment_method_types: ["card"],
