@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { getAI } from "@/lib/ai/client";
+import { streamChat } from "@/lib/ai/client";
 
 export async function POST(request: NextRequest) {
   const { messages } = await request.json();
@@ -30,7 +30,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Fetch restaurant data for context
   let restaurantContext = "";
   try {
     const { data: restaurant } = await supabase
@@ -53,7 +52,6 @@ RESTAURANT DATA:
 `;
     }
 
-    // Fetch menu items
     if (restaurant?.id) {
       const { data: menuItems } = await supabase
         .from("menu_items")
@@ -70,7 +68,6 @@ ${menuItems.map((m) => `  - ${m.name} (${m.category}): €${m.price} (cost €${
       }
     }
 
-    // Fetch recent reviews
     if (restaurant?.id) {
       const { data: reviews } = await supabase
         .from("reviews")
@@ -87,7 +84,6 @@ ${reviews.map((r) => `  - ${r.platform} ${r.rating}★ (${r.sentiment}): "${r.te
       }
     }
 
-    // Fetch recent orders
     if (restaurant?.id) {
       const { data: recentOrders } = await supabase
         .from("orders")
@@ -134,31 +130,22 @@ ${restaurantContext}
 Always be helpful, specific, and focused on driving revenue growth. Use the real data above to give personalized advice.`;
 
   try {
-    const stream = await (await getAI()).chat.completions.create({
-      model: "meta/llama-3.1-8b-instruct",
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        ...messages.map((m: { role: string; content: string }) => ({
-          role: m.role as "user" | "assistant",
-          content: m.content,
-        })),
-      ],
-      stream: true,
-      max_tokens: 1024,
-      temperature: 0.7,
-    });
+    const chatMessages = [
+      { role: "system", content: SYSTEM_PROMPT },
+      ...messages.map((m: { role: string; content: string }) => ({
+        role: m.role,
+        content: m.content,
+      })),
+    ];
 
     const encoder = new TextEncoder();
     const readable = new ReadableStream({
       async start(controller) {
         try {
-          for await (const chunk of stream) {
-            const content = chunk.choices[0]?.delta?.content;
-            if (content) {
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
-              );
-            }
+          for await (const chunk of streamChat("meta/llama-3.1-8b-instruct", chatMessages)) {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ content: chunk })}\n\n`)
+            );
           }
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();
