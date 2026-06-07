@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import ai from "@/lib/ai/client";
+import { getAI } from "@/lib/ai/client";
 
 export async function POST(request: NextRequest) {
   const { messages } = await request.json();
@@ -134,7 +134,7 @@ ${restaurantContext}
 Always be helpful, specific, and focused on driving revenue growth. Use the real data above to give personalized advice.`;
 
   try {
-    const stream = await ai.chat.completions.create({
+    const stream = await getAI().chat.completions.create({
       model: "meta/llama-3.1-8b-instruct",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
