@@ -52,6 +52,54 @@ export default function MarketingHomePage() {
         </div>
       </section>
 
+      {/* How it Works */}
+      <section className="py-20 sm:py-32">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              Como funciona
+            </h2>
+            <p className="mt-4 text-lg text-muted-foreground">
+              Três passos simples para transformar o teu delivery.
+            </p>
+          </div>
+          <div className="mt-16 grid gap-8 md:grid-cols-3">
+            {[
+              {
+                step: "01",
+                title: "Liga as plataformas",
+                description:
+                  "Connect Uber Eats, Glovo e Bolt Food em menos de 2 minutos. Sem código, sem complicação.",
+              },
+              {
+                step: "02",
+                title: "A IA analisa tudo",
+                description:
+                  "O Kivo processa vendas, menu, preços e avaliações. Identifica padrões e oportunidades.",
+              },
+              {
+                step: "03",
+                title: "Recebe e executa",
+                description:
+                  "Insights, alertas e ações recomendadas no dashboard ou WhatsApp. Tu decides — ou a IA executa.",
+              },
+            ].map((item) => (
+              <div key={item.step} className="relative text-center">
+                <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-xl font-bold text-primary">
+                  {item.step}
+                </div>
+                <h3 className="text-lg font-semibold text-foreground">
+                  {item.title}
+                </h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {item.description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Features */}
       <section className="py-20 sm:py-32">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -177,6 +225,49 @@ export default function MarketingHomePage() {
                 >
                   Começar
                 </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="py-20 sm:py-32">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              Perguntas frequentes
+            </h2>
+          </div>
+          <div className="mx-auto mt-12 max-w-3xl space-y-4">
+            {[
+              {
+                q: "Preciso de saber programar?",
+                a: "Não. O Kivo é 100% self-service. Liga as plataformas, responde ao questionário e a IA faz o resto.",
+              },
+              {
+                q: "Funciona com o meu restaurante?",
+                a: "Sim, se estás no Uber Eats, Glovo ou Bolt Food. O Kivo suporta qualquer tipo de cozinha e tamanho de restaurante em Portugal.",
+              },
+              {
+                q: "Quanto tempo demora a ver resultados?",
+                a: "Os primeiros insights aparecem em 24-48 horas. Recomendações de preço e promoções em 3-5 dias. Impacto real em 2-4 semanas.",
+              },
+              {
+                q: "Posso cancelar a qualquer momento?",
+                a: "Sim. Sem fidelização, sem taxas de cancelamento. Cancela quando quiseres.",
+              },
+              {
+                q: "Os meus dados estão seguros?",
+                a: "Sim. Utilizamos Supabase (PostgreSQL) com encriptação, RLS e hospedagem na UE. Não partilhamos dados com terceiros.",
+              },
+            ].map((item) => (
+              <div
+                key={item.q}
+                className="rounded-lg border bg-card p-6 shadow-sm"
+              >
+                <h3 className="font-semibold text-foreground">{item.q}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{item.a}</p>
               </div>
             ))}
           </div>
