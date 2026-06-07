@@ -134,7 +134,7 @@ ${restaurantContext}
 Always be helpful, specific, and focused on driving revenue growth. Use the real data above to give personalized advice.`;
 
   try {
-    const stream = await getAI().chat.completions.create({
+    const stream = await (await getAI()).chat.completions.create({
       model: "meta/llama-3.1-8b-instruct",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },

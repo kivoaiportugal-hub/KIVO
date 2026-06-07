@@ -1,8 +1,6 @@
-import OpenAI from "openai";
+let _ai: any = null;
 
-let _ai: OpenAI | null = null;
-
-export function getAI(): OpenAI {
+export async function getAI() {
   if (!_ai) {
     const apiKey = process.env.NVIDIA_API_KEY;
     const baseURL = process.env.NVIDIA_BASE_URL;
@@ -11,6 +9,7 @@ export function getAI(): OpenAI {
         "NVIDIA_API_KEY is not configured. Add it in Vercel → Settings → Environment Variables."
       );
     }
+    const { default: OpenAI } = await import("openai");
     _ai = new OpenAI({
       apiKey,
       baseURL: baseURL || "https://integrate.api.nvidia.com/v1",
@@ -18,12 +17,3 @@ export function getAI(): OpenAI {
   }
   return _ai;
 }
-
-// Keep backward compatibility
-const ai = new Proxy({} as OpenAI, {
-  get(_, prop) {
-    return (getAI() as any)[prop];
-  },
-});
-
-export default ai;
