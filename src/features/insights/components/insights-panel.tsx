@@ -27,7 +27,7 @@ export function InsightsPanel() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!restaurant?.id) return;
+    if (!restaurant?.id) { setLoading(false); return; }
     const supabase = createClient();
 
     async function load() {

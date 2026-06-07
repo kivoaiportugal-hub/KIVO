@@ -52,12 +52,16 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!restaurant?.id) return;
-    supabase
-      .from("autopilot_rules")
-      .select("*")
-      .eq("restaurant_id", restaurant.id)
-      .order("created_at", { ascending: false })
-      .then(({ data }) => setAutopilotRules(data || []));
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("autopilot_rules")
+          .select("*")
+          .eq("restaurant_id", restaurant.id)
+          .order("created_at", { ascending: false });
+        if (!error) setAutopilotRules(data || []);
+      } catch {}
+    })();
   }, [restaurant?.id]);
 
   const handleSaveProfile = async () => {

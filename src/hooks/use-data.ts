@@ -28,55 +28,39 @@ export function useRestaurant() {
   const [loading, setLoading] = useState(true);
 
   const fetchRestaurant = useCallback(async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-
-    const { data } = await supabase
-      .from("restaurants")
-      .select("*")
-      .eq("user_id", user.id)
-      .single();
-
-    setRestaurant(data as Restaurant | null);
-    setLoading(false);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setLoading(false); return; }
+      const { data, error } = await supabase
+        .from("restaurants").select("*").eq("user_id", user.id).single();
+      if (!error && data) setRestaurant(data as Restaurant | null);
+    } catch { /* table might not exist */ } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => {
-    fetchRestaurant();
-  }, [fetchRestaurant]);
-
+  useEffect(() => { fetchRestaurant(); }, [fetchRestaurant]);
   return { restaurant, loading, refresh: fetchRestaurant };
 }
 
 export function useUser() {
   const supabase = createClient();
   const [user, setUser] = useState<{
-    id: string;
-    email: string;
-    full_name: string;
-    restaurant_name: string;
+    id: string; email: string; full_name: string; restaurant_name: string;
   } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadUser = async () => {
-      const {
-        data: { user: authUser },
-      } = await supabase.auth.getUser();
-      if (authUser) {
-        setUser({
-          id: authUser.id,
-          email: authUser.email || "",
-          full_name: authUser.user_metadata?.full_name || "",
-          restaurant_name: authUser.user_metadata?.restaurant_name || "",
-        });
-      }
-      setLoading(false);
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (authUser) {
+          setUser({
+            id: authUser.id,
+            email: authUser.email || "",
+            full_name: authUser.user_metadata?.full_name || "",
+            restaurant_name: authUser.user_metadata?.restaurant_name || "",
+          });
+        }
+      } catch {} finally { setLoading(false); }
     };
     loadUser();
   }, []);
@@ -90,39 +74,26 @@ export function useMenuItems(restaurantId: string | undefined) {
   const [loading, setLoading] = useState(true);
 
   const fetchItems = useCallback(async () => {
-    if (!restaurantId) {
-      setLoading(false);
-      return;
-    }
-
-    const { data } = await supabase
-      .from("menu_items")
-      .select("*")
-      .eq("restaurant_id", restaurantId)
-      .order("orders_count", { ascending: false });
-
-    setItems(data || []);
-    setLoading(false);
+    if (!restaurantId) { setLoading(false); return; }
+    try {
+      const { data, error } = await supabase
+        .from("menu_items").select("*").eq("restaurant_id", restaurantId)
+        .order("orders_count", { ascending: false });
+      if (!error) setItems(data || []);
+    } catch {} finally { setLoading(false); }
   }, [restaurantId]);
 
-  useEffect(() => {
-    fetchItems();
-  }, [fetchItems]);
+  useEffect(() => { fetchItems(); }, [fetchItems]);
 
   const addItem = async (item: { name: string; category: string; price: number; cost: number }) => {
     if (!restaurantId) return;
-    await supabase.from("menu_items").insert({ ...item, restaurant_id: restaurantId });
-    fetchItems();
+    try { await supabase.from("menu_items").insert({ ...item, restaurant_id: restaurantId }); fetchItems(); } catch {}
   };
-
   const updateItem = async (id: string, updates: Partial<any>) => {
-    await supabase.from("menu_items").update(updates).eq("id", id);
-    fetchItems();
+    try { await supabase.from("menu_items").update(updates).eq("id", id); fetchItems(); } catch {}
   };
-
   const deleteItem = async (id: string) => {
-    await supabase.from("menu_items").delete().eq("id", id);
-    fetchItems();
+    try { await supabase.from("menu_items").delete().eq("id", id); fetchItems(); } catch {}
   };
 
   return { items, loading, addItem, updateItem, deleteItem, refresh: fetchItems };
@@ -134,34 +105,23 @@ export function useReviews(restaurantId: string | undefined) {
   const [loading, setLoading] = useState(true);
 
   const fetchReviews = useCallback(async () => {
-    if (!restaurantId) {
-      setLoading(false);
-      return;
-    }
-
-    const { data } = await supabase
-      .from("reviews")
-      .select("*")
-      .eq("restaurant_id", restaurantId)
-      .order("reviewed_at", { ascending: false });
-
-    setReviews(data || []);
-    setLoading(false);
+    if (!restaurantId) { setLoading(false); return; }
+    try {
+      const { data, error } = await supabase
+        .from("reviews").select("*").eq("restaurant_id", restaurantId)
+        .order("reviewed_at", { ascending: false });
+      if (!error) setReviews(data || []);
+    } catch {} finally { setLoading(false); }
   }, [restaurantId]);
 
-  useEffect(() => {
-    fetchReviews();
-  }, [fetchReviews]);
+  useEffect(() => { fetchReviews(); }, [fetchReviews]);
 
   const addReview = async (review: { platform: string; rating: number; text: string; sentiment: string }) => {
     if (!restaurantId) return;
-    await supabase.from("reviews").insert({ ...review, restaurant_id: restaurantId });
-    fetchReviews();
+    try { await supabase.from("reviews").insert({ ...review, restaurant_id: restaurantId }); fetchReviews(); } catch {}
   };
-
   const respondToReview = async (id: string, responseText: string) => {
-    await supabase.from("reviews").update({ responded: true, response_text: responseText }).eq("id", id);
-    fetchReviews();
+    try { await supabase.from("reviews").update({ responded: true, response_text: responseText }).eq("id", id); fetchReviews(); } catch {}
   };
 
   return { reviews, loading, addReview, respondToReview, refresh: fetchReviews };
@@ -173,39 +133,26 @@ export function usePromotions(restaurantId: string | undefined) {
   const [loading, setLoading] = useState(true);
 
   const fetchPromotions = useCallback(async () => {
-    if (!restaurantId) {
-      setLoading(false);
-      return;
-    }
-
-    const { data } = await supabase
-      .from("promotions")
-      .select("*")
-      .eq("restaurant_id", restaurantId)
-      .order("created_at", { ascending: false });
-
-    setPromotions(data || []);
-    setLoading(false);
+    if (!restaurantId) { setLoading(false); return; }
+    try {
+      const { data, error } = await supabase
+        .from("promotions").select("*").eq("restaurant_id", restaurantId)
+        .order("created_at", { ascending: false });
+      if (!error) setPromotions(data || []);
+    } catch {} finally { setLoading(false); }
   }, [restaurantId]);
 
-  useEffect(() => {
-    fetchPromotions();
-  }, [fetchPromotions]);
+  useEffect(() => { fetchPromotions(); }, [fetchPromotions]);
 
   const addPromotion = async (promo: { name: string; platform: string; discount_type: string; discount_value: number }) => {
     if (!restaurantId) return;
-    await supabase.from("promotions").insert({ ...promo, restaurant_id: restaurantId, status: "active" });
-    fetchPromotions();
+    try { await supabase.from("promotions").insert({ ...promo, restaurant_id: restaurantId, status: "active" }); fetchPromotions(); } catch {}
   };
-
   const updatePromotion = async (id: string, updates: Partial<any>) => {
-    await supabase.from("promotions").update(updates).eq("id", id);
-    fetchPromotions();
+    try { await supabase.from("promotions").update(updates).eq("id", id); fetchPromotions(); } catch {}
   };
-
   const deletePromotion = async (id: string) => {
-    await supabase.from("promotions").delete().eq("id", id);
-    fetchPromotions();
+    try { await supabase.from("promotions").delete().eq("id", id); fetchPromotions(); } catch {}
   };
 
   return { promotions, loading, addPromotion, updatePromotion, deletePromotion, refresh: fetchPromotions };
@@ -217,28 +164,19 @@ export function useAlerts(restaurantId: string | undefined) {
   const [loading, setLoading] = useState(true);
 
   const fetchAlerts = useCallback(async () => {
-    if (!restaurantId) {
-      setLoading(false);
-      return;
-    }
-
-    const { data } = await supabase
-      .from("alerts")
-      .select("*")
-      .eq("restaurant_id", restaurantId)
-      .order("created_at", { ascending: false });
-
-    setAlerts(data || []);
-    setLoading(false);
+    if (!restaurantId) { setLoading(false); return; }
+    try {
+      const { data, error } = await supabase
+        .from("alerts").select("*").eq("restaurant_id", restaurantId)
+        .order("created_at", { ascending: false });
+      if (!error) setAlerts(data || []);
+    } catch {} finally { setLoading(false); }
   }, [restaurantId]);
 
-  useEffect(() => {
-    fetchAlerts();
-  }, [fetchAlerts]);
+  useEffect(() => { fetchAlerts(); }, [fetchAlerts]);
 
   const markAsRead = async (id: string) => {
-    await supabase.from("alerts").update({ read: true }).eq("id", id);
-    fetchAlerts();
+    try { await supabase.from("alerts").update({ read: true }).eq("id", id); fetchAlerts(); } catch {}
   };
 
   return { alerts, loading, markAsRead, refresh: fetchAlerts };
@@ -250,25 +188,15 @@ export function useOrders(restaurantId: string | undefined) {
   const [loading, setLoading] = useState(true);
 
   const fetchOrders = useCallback(async () => {
-    if (!restaurantId) {
-      setLoading(false);
-      return;
-    }
-
-    const { data } = await supabase
-      .from("orders")
-      .select("*")
-      .eq("restaurant_id", restaurantId)
-      .order("ordered_at", { ascending: false })
-      .limit(100);
-
-    setOrders(data || []);
-    setLoading(false);
+    if (!restaurantId) { setLoading(false); return; }
+    try {
+      const { data, error } = await supabase
+        .from("orders").select("*").eq("restaurant_id", restaurantId)
+        .order("ordered_at", { ascending: false }).limit(100);
+      if (!error) setOrders(data || []);
+    } catch {} finally { setLoading(false); }
   }, [restaurantId]);
 
-  useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
-
+  useEffect(() => { fetchOrders(); }, [fetchOrders]);
   return { orders, loading, refresh: fetchOrders };
 }

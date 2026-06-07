@@ -16,18 +16,22 @@ export default function PerformancePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!restaurant?.id) return;
+    if (!restaurant?.id) {
+      setLoading(false);
+      return;
+    }
     const supabase = createClient();
-    supabase
-      .from("orders")
-      .select("total, platform, ordered_at")
-      .eq("restaurant_id", restaurant.id)
-      .order("ordered_at", { ascending: false })
-      .limit(500)
-      .then(({ data }) => {
-        setOrders(data || []);
-        setLoading(false);
-      });
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("orders")
+          .select("total, platform, ordered_at")
+          .eq("restaurant_id", restaurant.id)
+          .order("ordered_at", { ascending: false })
+          .limit(500);
+        if (!error) setOrders(data || []);
+      } catch {} finally { setLoading(false); }
+    })();
   }, [restaurant?.id]);
 
   if (loading) {
