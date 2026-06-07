@@ -29,7 +29,7 @@ export default function LoginPage() {
       return;
     }
 
-    window.location.href = "/dashboard/home";
+    window.location.href = "/dashboard/assistant";
   };
 
   const handleGoogleLogin = async () => {

@@ -33,7 +33,7 @@ export default function RegisterPage() {
       return;
     }
 
-    window.location.href = "/dashboard/home";
+    window.location.href = "/dashboard/assistant";
   };
 
   const handleGoogleLogin = async () => {

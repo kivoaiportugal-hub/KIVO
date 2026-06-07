@@ -123,7 +123,7 @@ export function OnboardingWizard() {
         },
       });
 
-      window.location.href = "/dashboard/home";
+      window.location.href = "/dashboard/assistant";
     } catch (err) {
       console.error("Onboarding error:", err);
       setError("Erro ao guardar. Tenta novamente.");
@@ -137,9 +137,9 @@ export function OnboardingWizard() {
       await supabase.auth.updateUser({
         data: { onboarding_completed: true },
       });
-      window.location.href = "/dashboard/home";
+      window.location.href = "/dashboard/assistant";
     } catch {
-      window.location.href = "/dashboard/home";
+      window.location.href = "/dashboard/assistant";
     }
   };
 
