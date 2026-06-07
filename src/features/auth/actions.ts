@@ -3,25 +3,26 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
-export async function login(formData: FormData) {
+export async function login(_prevState: { error: string }, formData: FormData) {
   const supabase = await createClient();
 
-  const data = {
-    email: formData.get("email") as string,
-    password: formData.get("password") as string,
-  };
+  const email = formData.get("email") as string;
+  const password = formData.get("password") as string;
 
-  const { error } = await supabase.auth.signInWithPassword(data);
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
 
   if (error) {
     return { error: error.message };
   }
 
   revalidatePath("/", "layout");
-  return { success: true, redirectTo: "/dashboard/home" };
+  return { error: "" };
 }
 
-export async function register(formData: FormData) {
+export async function register(_prevState: { error: string }, formData: FormData) {
   const supabase = await createClient();
 
   const email = formData.get("email") as string;
@@ -43,7 +44,7 @@ export async function register(formData: FormData) {
   }
 
   revalidatePath("/", "layout");
-  return { success: true, redirectTo: "/dashboard/home" };
+  return { error: "" };
 }
 
 export async function loginWithGoogle() {
@@ -70,10 +71,10 @@ export async function loginWithGoogle() {
 export async function logout() {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  return { success: true, redirectTo: "/" };
+  return { success: true };
 }
 
-export async function forgotPassword(formData: FormData) {
+export async function forgotPassword(_prevState: { error: string; success: boolean }, formData: FormData) {
   const supabase = await createClient();
 
   const email = formData.get("email") as string;
@@ -83,13 +84,13 @@ export async function forgotPassword(formData: FormData) {
   });
 
   if (error) {
-    return { error: error.message };
+    return { error: error.message, success: false };
   }
 
-  return { success: true };
+  return { error: "", success: true };
 }
 
-export async function resetPassword(formData: FormData) {
+export async function resetPassword(_prevState: { error: string }, formData: FormData) {
   const supabase = await createClient();
 
   const password = formData.get("password") as string;
@@ -102,5 +103,5 @@ export async function resetPassword(formData: FormData) {
     return { error: error.message };
   }
 
-  return { success: true, redirectTo: "/dashboard/home" };
+  return { error: "" };
 }
