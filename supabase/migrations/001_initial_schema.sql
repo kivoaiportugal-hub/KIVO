@@ -244,3 +244,32 @@ CREATE INDEX IF NOT EXISTS idx_reviews_restaurant_id ON reviews(restaurant_id);
 CREATE INDEX IF NOT EXISTS idx_promotions_restaurant_id ON promotions(restaurant_id);
 CREATE INDEX IF NOT EXISTS idx_alerts_restaurant_id ON alerts(restaurant_id);
 CREATE INDEX IF NOT EXISTS idx_chat_messages_user_id ON chat_messages(user_id);
+
+-- Auto-update updated_at column on UPDATE
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_subscriptions_updated_at
+  BEFORE UPDATE ON subscriptions
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_restaurants_updated_at
+  BEFORE UPDATE ON restaurants
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_menu_items_updated_at
+  BEFORE UPDATE ON menu_items
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_promotions_updated_at
+  BEFORE UPDATE ON promotions
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_autopilot_rules_updated_at
+  BEFORE UPDATE ON autopilot_rules
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

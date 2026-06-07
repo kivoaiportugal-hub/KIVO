@@ -1,115 +1,230 @@
 "use client";
 
-const forecastData = [
-  { day: "Seg", actual: 85, predicted: 82 },
-  { day: "Ter", actual: 62, predicted: 65 },
-  { day: "Qua", actual: 78, predicted: 75 },
-  { day: "Qui", actual: 91, predicted: 88 },
-  { day: "Sex", actual: 120, predicted: 115 },
-  { day: "Sáb", actual: null, predicted: 142 },
-  { day: "Dom", actual: null, predicted: 95 },
-];
-
-const maxVal = Math.max(...forecastData.map((d) => Math.max(d.actual || 0, d.predicted)));
-
-const insights = [
-  {
-    title: "Pico esperado sexta-feira",
-    description: "Previsão de 142 pedidos. Considera reforçar a equipa entre 19h-21h.",
-    type: "info",
-  },
-  {
-    title: "Domingo mais fraco",
-    description: "Queda de 33% vs sábado. Campanha de domingo pode ajudar.",
-    type: "warning",
-  },
-  {
-    title: "Tendência semanal: +8%",
-    description: "Crescimento consistente. Se mantiveres, atinges €10k/mês.",
-    type: "success",
-  },
-];
-
-const typeStyles = {
-  info: "border-primary/20 bg-primary/5",
-  warning: "border-yellow-500/20 bg-yellow-500/5",
-  success: "border-green-500/20 bg-green-500/5",
-};
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useRestaurant } from "@/hooks/use-data";
 
 export default function ForecastsPage() {
+  const supabase = createClient();
+  const { restaurant } = useRestaurant();
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchOrders = async () => {
+      if (!restaurant?.id) {
+        setLoading(false);
+        return;
+      }
+
+      const { data } = await supabase
+        .from("orders")
+        .select("*")
+        .eq("restaurant_id", restaurant.id)
+        .order("ordered_at", { ascending: false })
+        .limit(300);
+
+      setOrders(data || []);
+      setLoading(false);
+    };
+
+    fetchOrders();
+  }, [restaurant?.id]);
+
+  // Calculate daily averages from real data
+  const dayOfWeekMap: Record<string, number[]> = {
+    Seg: [],
+    Ter: [],
+    Qua: [],
+    Qui: [],
+    Sex: [],
+    Sáb: [],
+    Dom: [],
+  };
+
+  const dayNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+  orders.forEach((o) => {
+    const date = new Date(o.ordered_at);
+    const dayName = dayNames[date.getDay()];
+    if (dayOfWeekMap[dayName]) {
+      dayOfWeekMap[dayName].push(o.total || 0);
+    }
+  });
+
+  const forecastData = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map(
+    (day) => {
+      const dayOrders = dayOfWeekMap[day];
+      const avg = dayOrders.length > 0
+        ? dayOrders.reduce((s, v) => s + v, 0) / dayOrders.length
+        : 0;
+      const count = dayOrders.length;
+      return {
+        day,
+        avgRevenue: Math.round(avg),
+        orderCount: count,
+      };
+    }
+  );
+
+  const totalWeeklyRevenue = forecastData.reduce(
+    (s, d) => s + d.avgRevenue,
+    0
+  );
+  const totalWeeklyOrders = forecastData.reduce(
+    (s, d) => s + d.orderCount,
+    0
+  );
+
+  const maxRevenue = Math.max(...forecastData.map((d) => d.avgRevenue), 1);
+
+  // Generate insights from real data
+  const bestDay = forecastData.reduce((a, b) =>
+    a.avgRevenue > b.avgRevenue ? a : b
+  );
+  const worstDay = forecastData.reduce((a, b) =>
+    a.avgRevenue < b.avgRevenue ? a : b
+  );
+
+  const insights = [];
+  if (orders.length > 0) {
+    if (bestDay.day !== worstDay.day) {
+      insights.push({
+        title: `${bestDay.day} é o melhor dia`,
+        description: `Média de €${bestDay.avgRevenue}/dia. Considera reforçar a equipa.`,
+        type: "success",
+      });
+    }
+    if (worstDay.avgRevenue < bestDay.avgRevenue * 0.5) {
+      insights.push({
+        title: `${worstDay.day} é mais fraco`,
+        description: `Média de €${worstDay.avgRevenue}/dia. Uma promoção pode ajudar.`,
+        type: "warning",
+      });
+    }
+    insights.push({
+      title: `${orders.length} pedidos nos últimos registos`,
+      description: `Receita média: €${totalWeeklyOrders > 0 ? (totalWeeklyRevenue / 7).toFixed(0) : 0}/dia.`,
+      type: "info",
+    });
+  }
+
+  const typeStyles = {
+    info: "border-primary/20 bg-primary/5",
+    warning: "border-yellow-500/20 bg-yellow-500/5",
+    success: "border-green-500/20 bg-green-500/5",
+  };
+
+  if (loading) {
+    return (
+      <div className="flex-1 space-y-6 p-6">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 w-48 rounded bg-muted" />
+          <div className="h-48 rounded-lg border bg-card" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 space-y-6 p-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Forecast</h1>
         <p className="text-sm text-muted-foreground">
-          Previsões de demanda baseadas em dados históricos e padrões.
+          Previsões baseadas nos teus dados históricos de pedidos.
         </p>
       </div>
 
-      {/* Forecast Chart */}
-      <div className="rounded-lg border bg-card p-6 shadow-sm">
-        <h3 className="text-sm font-semibold mb-4">Previsão 7 Dias</h3>
-        <div className="flex items-end gap-3 h-48">
-          {forecastData.map((d) => (
-            <div key={d.day} className="flex flex-1 flex-col items-center gap-1">
-              <div className="flex w-full items-end gap-1" style={{ height: "140px" }}>
-                {d.actual !== null && (
-                  <div
-                    className="flex-1 rounded-t bg-primary"
-                    style={{ height: `${(d.actual / maxVal) * 100}%` }}
-                  />
-                )}
+      {orders.length === 0 ? (
+        <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
+          Sem dados de pedidos para gerar previsões. Liga as tuas plataformas em{" "}
+          <a href="/dashboard/integrations" className="text-primary hover:underline">
+            Integrações
+          </a>
+          .
+        </div>
+      ) : (
+        <>
+          {/* Forecast Chart */}
+          <div className="rounded-lg border bg-card p-6 shadow-sm">
+            <h3 className="text-sm font-semibold mb-4">
+              Receita Média por Dia da Semana
+            </h3>
+            <div className="flex items-end gap-3 h-48">
+              {forecastData.map((d) => (
                 <div
-                  className="flex-1 rounded-t bg-primary/30 border border-primary/50 border-dashed"
-                  style={{ height: `${(d.predicted / maxVal) * 100}%` }}
-                />
-              </div>
-              <span className="text-xs font-medium">{d.day}</span>
-              <span className="text-[10px] text-muted-foreground">
-                {d.actual || d.predicted}
-              </span>
+                  key={d.day}
+                  className="flex flex-1 flex-col items-center gap-1"
+                >
+                  <div
+                    className="w-full rounded-t bg-primary transition-all min-h-[2px]"
+                    style={{
+                      height: `${
+                        maxRevenue > 0
+                          ? (d.avgRevenue / maxRevenue) * 100
+                          : 0
+                      }%`,
+                    }}
+                  />
+                  <span className="text-xs font-medium">{d.day}</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    €{d.avgRevenue}
+                  </span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
-          <div className="flex items-center gap-1">
-            <div className="h-3 w-3 rounded bg-primary" /> Real
           </div>
-          <div className="flex items-center gap-1">
-            <div className="h-3 w-3 rounded border border-primary/50 border-dashed bg-primary/30" /> Previsto
-          </div>
-        </div>
-      </div>
 
-      {/* AI Insights */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold">Insights AI</h3>
-        {insights.map((insight) => (
-          <div key={insight.title} className={`rounded-lg border p-4 ${typeStyles[insight.type as keyof typeof typeStyles]}`}>
-            <div className="font-medium text-sm">{insight.title}</div>
-            <div className="text-sm text-muted-foreground mt-1">{insight.description}</div>
-          </div>
-        ))}
-      </div>
+          {/* AI Insights */}
+          {insights.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold">Insights AI</h3>
+              {insights.map((insight) => (
+                <div
+                  key={insight.title}
+                  className={`rounded-lg border p-4 ${
+                    typeStyles[insight.type as keyof typeof typeStyles]
+                  }`}
+                >
+                  <div className="font-medium text-sm">{insight.title}</div>
+                  <div className="text-sm text-muted-foreground mt-1">
+                    {insight.description}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
-      {/* Weekly Summary */}
-      <div className="rounded-lg border bg-card p-6 shadow-sm">
-        <h3 className="text-sm font-semibold mb-4">Resumo Semanal</h3>
-        <div className="grid grid-cols-3 gap-4 text-center">
-          <div>
-            <div className="text-2xl font-bold">651</div>
-            <div className="text-xs text-muted-foreground">Pedidos previstos</div>
+          {/* Summary */}
+          <div className="rounded-lg border bg-card p-6 shadow-sm">
+            <h3 className="text-sm font-semibold mb-4">Resumo</h3>
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <div className="text-2xl font-bold">{totalWeeklyOrders}</div>
+                <div className="text-xs text-muted-foreground">
+                  Pedidos (total registados)
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold">
+                  €{totalWeeklyRevenue}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Receita total
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold">
+                  €{orders.length > 0 ? (orders.reduce((s, o) => s + (o.total || 0), 0) / orders.length).toFixed(2) : "0"}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Ticket médio
+                </div>
+              </div>
+            </div>
           </div>
-          <div>
-            <div className="text-2xl font-bold">€8,680</div>
-            <div className="text-xs text-muted-foreground">Receita prevista</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-green-600">+8%</div>
-            <div className="text-xs text-muted-foreground">vs semana anterior</div>
-          </div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }

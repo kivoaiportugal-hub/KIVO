@@ -2,24 +2,24 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useRestaurant } from "@/hooks/use-data";
 import { KPICard } from "@/features/home/components/kpi-card";
 import { AIInsight } from "@/features/home/components/ai-insight";
 import { NextBestAction } from "@/features/home/components/next-best-action";
-import { AlertsList } from "@/features/home/components/alerts-list";
-
-interface Restaurant {
-  name: string;
-  cuisine_type: string;
-  city: string;
-  platforms: string[];
-  onboarding_score: number;
-  onboarding_plan: string;
-}
 
 export default function DashboardHomePage() {
   const supabase = createClient();
-  const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const { restaurant } = useRestaurant();
   const [userName, setUserName] = useState("");
+  const [todayStats, setTodayStats] = useState({
+    revenue: 0,
+    orders: 0,
+    avgTicket: 0,
+  });
+  const [yesterdayStats, setYesterdayStats] = useState({
+    revenue: 0,
+    orders: 0,
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -35,22 +35,70 @@ export default function DashboardHomePage() {
             user.email?.split("@")[0] ||
             "Utilizador"
         );
-
-        const { data } = await supabase
-          .from("restaurants")
-          .select("*")
-          .eq("user_id", user.id)
-          .single();
-
-        if (data) {
-          setRestaurant(data);
-        }
       }
+
+      if (!restaurant?.id) {
+        setLoading(false);
+        return;
+      }
+
+      // Fetch today's orders
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString();
+
+      const { data: todayOrders } = await supabase
+        .from("orders")
+        .select("total")
+        .eq("restaurant_id", restaurant.id)
+        .gte("ordered_at", todayStr);
+
+      // Fetch yesterday's orders
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString();
+
+      const { data: yesterdayOrders } = await supabase
+        .from("orders")
+        .select("total")
+        .eq("restaurant_id", restaurant.id)
+        .gte("ordered_at", yesterdayStr)
+        .lt("ordered_at", todayStr);
+
+      const tRevenue =
+        todayOrders?.reduce((s, o) => s + (o.total || 0), 0) || 0;
+      const tOrders = todayOrders?.length || 0;
+      const tAvg = tOrders > 0 ? tRevenue / tOrders : 0;
+
+      const yRevenue =
+        yesterdayOrders?.reduce((s, o) => s + (o.total || 0), 0) || 0;
+      const yOrders = yesterdayOrders?.length || 0;
+
+      setTodayStats({ revenue: tRevenue, orders: tOrders, avgTicket: tAvg });
+      setYesterdayStats({ revenue: yRevenue, orders: yOrders });
       setLoading(false);
     };
 
     fetchData();
-  }, []);
+  }, [restaurant?.id]);
+
+  const revenueChange =
+    yesterdayStats.revenue > 0
+      ? Math.round(
+          ((todayStats.revenue - yesterdayStats.revenue) /
+            yesterdayStats.revenue) *
+            100
+        )
+      : 0;
+
+  const ordersChange =
+    yesterdayStats.orders > 0
+      ? Math.round(
+          ((todayStats.orders - yesterdayStats.orders) /
+            yesterdayStats.orders) *
+            100
+        )
+      : 0;
 
   if (loading) {
     return (
@@ -94,13 +142,35 @@ export default function DashboardHomePage() {
 
       {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <KPICard label="Receita Hoje" value="€0" icon="💰" />
-        <KPICard label="Margem Estimada" value="0%" icon="📊" />
-        <KPICard label="Pedidos" value="0" icon="📦" />
-        <KPICard label="Ticket Médio" value="€0" icon="🎫" />
+        <KPICard
+          label="Receita Hoje"
+          value={`€${todayStats.revenue.toFixed(0)}`}
+          change={revenueChange}
+          icon="💰"
+        />
+        <KPICard
+          label="Pedidos Hoje"
+          value={String(todayStats.orders)}
+          change={ordersChange}
+          icon="📦"
+        />
+        <KPICard
+          label="Ticket Médio"
+          value={`€${todayStats.avgTicket.toFixed(2)}`}
+          icon="🎫"
+        />
+        <KPICard
+          label="Margem Média"
+          value={
+            restaurant
+              ? `${restaurant.onboarding_score || 0}%`
+              : "—"
+          }
+          icon="📊"
+        />
       </div>
 
-      {/* Restaurant Info (from onboarding) */}
+      {/* Restaurant Info */}
       {restaurant && (
         <div className="rounded-lg border bg-card p-6 shadow-sm">
           <h3 className="text-sm font-semibold mb-3">O Teu Restaurante</h3>
@@ -119,26 +189,47 @@ export default function DashboardHomePage() {
                 {restaurant.platforms?.join(", ") || "Nenhuma"}
               </span>
             </div>
-            <div>
-              <span className="text-muted-foreground">Maturidade:</span>{" "}
-              <span className="font-medium">{restaurant.onboarding_score}/100</span>
-            </div>
           </div>
         </div>
       )}
 
       {/* AI Insight */}
       <AIInsight
-        message="Liga as tuas plataformas de delivery para receber insights personalizados sobre o teu restaurante."
+        message={
+          todayStats.orders === 0 && yesterdayStats.orders === 0
+            ? "Liga as tuas plataformas de delivery para receber insights personalizados sobre o teu restaurante."
+            : todayStats.revenue > yesterdayStats.revenue
+              ? `Boas! A receita de hoje está ${revenueChange}% acima de ontem. Continua assim!`
+              : `A receita de hoje está ${Math.abs(revenueChange)}% abaixo de ontem. Considera uma ação para aumentar pedidos.`
+        }
       />
 
       {/* Next Best Action */}
       <NextBestAction
-        title="Próximo Passo"
-        description="Connecta o Uber Eats, Glovo ou Bolt Food para começar a receber dados em tempo real."
-        impact="Dados automáticos"
+        title={
+          restaurant?.platforms?.length === 0
+            ? "Liga as tuas plataformas"
+            : todayStats.orders === 0
+              ? "Adiciona dados de pedidos"
+              : "Melhora o teu menu"
+        }
+        description={
+          restaurant?.platforms?.length === 0
+            ? "Connecta o Uber Eats, Glovo ou Bolt Food para começar a receber dados em tempo real."
+            : todayStats.orders === 0
+              ? "Os dados de pedidos são essenciais para insights precisos. Verifica as integrações."
+              : "Adiciona itens ao menu com custos precisos para receber sugestões de preço."
+        }
+        impact={
+          restaurant?.platforms?.length === 0
+            ? "Dados automáticos"
+            : "Análise completa"
+        }
         onApply={() => {
-          window.location.href = "/dashboard/integrations";
+          window.location.href =
+            restaurant?.platforms?.length === 0
+              ? "/dashboard/integrations"
+              : "/dashboard/menu";
         }}
         onDismiss={() => {}}
       />
