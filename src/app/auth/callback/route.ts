@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
@@ -7,10 +7,39 @@ export async function GET(request: Request) {
   const next = searchParams.get("next") ?? "/dashboard/home";
 
   if (code) {
-    const supabase = await createClient();
+    const supabaseResponse = NextResponse.next({ request });
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value }) =>
+              request.cookies.set(name, value)
+            );
+            cookiesToSet.forEach(({ name, value, options }) =>
+              supabaseResponse.cookies.set(name, value, options)
+            );
+          },
+        },
+      }
+    );
+
     const { error } = await supabase.auth.exchangeCodeForSession(code);
+
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`);
+      const redirectUrl = `${origin}${next}`;
+      const redirectResponse = NextResponse.redirect(redirectUrl, 302);
+
+      // Copy all cookies from supabaseResponse to redirectResponse
+      supabaseResponse.cookies.getAll().forEach((cookie) => {
+        redirectResponse.cookies.set(cookie.name, cookie.value, cookie);
+      });
+
+      return redirectResponse;
     }
   }
 
