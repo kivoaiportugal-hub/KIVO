@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import type { PlanId } from "@/lib/constants";
 import { PLANS } from "@/lib/constants";
 
@@ -43,7 +43,7 @@ export async function createCheckoutSession(planId: PlanId, interval: "monthly" 
   let customerId = existingSubscription?.stripe_customer_id;
 
   if (!customerId) {
-    const customer = await stripe.customers.create({
+    const customer = await getStripe().customers.create({
       email: user.email!,
       metadata: { user_id: user.id },
     });
@@ -57,7 +57,7 @@ export async function createCheckoutSession(planId: PlanId, interval: "monthly" 
     });
   }
 
-  const session = await stripe.checkout.sessions.create({
+  const session = await getStripe().checkout.sessions.create({
     customer: customerId,
     mode: "subscription",
     payment_method_types: ["card"],
@@ -103,7 +103,7 @@ export async function createPortalSession() {
     redirect("/dashboard/billing");
   }
 
-  const session = await stripe.billingPortal.sessions.create({
+  const session = await getStripe().billingPortal.sessions.create({
     customer: subscription.stripe_customer_id,
     return_url: `${process.env.NEXT_PUBLIC_APP_URL || "https://kivo.ai"}/dashboard/billing`,
   });
