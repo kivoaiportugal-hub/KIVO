@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
 export async function login(formData: FormData) {
@@ -19,7 +18,7 @@ export async function login(formData: FormData) {
   }
 
   revalidatePath("/", "layout");
-  redirect("/dashboard/home");
+  return { success: true, redirectTo: "/dashboard/home" };
 }
 
 export async function register(formData: FormData) {
@@ -44,7 +43,7 @@ export async function register(formData: FormData) {
   }
 
   revalidatePath("/", "layout");
-  redirect("/dashboard/home");
+  return { success: true, redirectTo: "/dashboard/home" };
 }
 
 export async function loginWithGoogle() {
@@ -58,18 +57,20 @@ export async function loginWithGoogle() {
   });
 
   if (error) {
-    redirect("/login?error=auth_error");
+    return { error: error.message };
   }
 
   if (data.url) {
-    redirect(data.url);
+    return { url: data.url };
   }
+
+  return { error: "Failed to get OAuth URL" };
 }
 
 export async function logout() {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  redirect("/");
+  return { success: true, redirectTo: "/" };
 }
 
 export async function forgotPassword(formData: FormData) {
@@ -101,5 +102,5 @@ export async function resetPassword(formData: FormData) {
     return { error: error.message };
   }
 
-  redirect("/dashboard/home");
+  return { success: true, redirectTo: "/dashboard/home" };
 }

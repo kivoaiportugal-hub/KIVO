@@ -1,16 +1,21 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useActionState } from "react";
 import { resetPassword } from "@/features/auth/actions";
 import type { AuthFormState } from "@/features/auth/types";
 import { initialAuthState } from "@/features/auth/types";
 
 export default function ResetPasswordPage() {
+  const router = useRouter();
   const [state, formAction, isPending] = useActionState(
     async (_prev: AuthFormState, formData: FormData) => {
       const result = await resetPassword(formData);
       if (result?.error) {
         return { error: result.error, success: false };
+      }
+      if (result?.redirectTo) {
+        router.push(result.redirectTo);
       }
       return { error: "", success: true };
     },

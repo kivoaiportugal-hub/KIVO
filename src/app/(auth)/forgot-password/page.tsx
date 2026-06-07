@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useActionState } from "react";
 import { forgotPassword } from "@/features/auth/actions";
 import type { AuthFormState } from "@/features/auth/types";
 import { initialAuthState } from "@/features/auth/types";
 
 export default function ForgotPasswordPage() {
+  const router = useRouter();
   const [state, formAction, isPending] = useActionState(
     async (_prev: AuthFormState, formData: FormData) => {
       const result = await forgotPassword(formData);
