@@ -48,7 +48,7 @@ export function SubscriptionProvider({
 
       // Get plan from user metadata first (fast)
       const planFromMeta = user.user_metadata?.onboarding_plan as PlanId;
-      if (planFromMeta && planFromMeta in ["start", "grow", "autopilot"]) {
+      if (planFromMeta && (["start", "grow", "autopilot"] as string[]).includes(planFromMeta)) {
         setPlan(planFromMeta);
       }
 

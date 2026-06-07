@@ -1,275 +1,215 @@
 "use client";
 
-import { useState } from "react";
-import { useRestaurant, useReviews } from "@/hooks/use-data";
+import { useEffect, useState } from "react";
+import { useReviews, useRestaurant } from "@/hooks/use-data";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 
 export default function ReviewsPage() {
   const { restaurant } = useRestaurant();
-  const { reviews, loading, addReview, respondToReview } = useReviews(restaurant?.id);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newReview, setNewReview] = useState({
-    platform: "uber_eats",
-    rating: 5,
-    text: "",
-  });
-  const [respondingId, setRespondingId] = useState<string | null>(null);
-  const [responseText, setResponseText] = useState("");
+  const { reviews, loading } = useReviews(restaurant?.id);
+  const [showImport, setShowImport] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [imported, setImported] = useState(false);
+  const router = useRouter();
 
-  const reviewStats = {
-    average:
-      reviews.length > 0
-        ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length
-        : 0,
-    total: reviews.length,
-    positive: reviews.filter((r) => r.rating >= 4).length,
-    negative: reviews.filter((r) => r.rating <= 2).length,
+  useEffect(() => {
+    if (!loading && reviews.length === 0 && !imported) {
+      setShowImport(true);
+    }
+  }, [loading, reviews.length, imported]);
+
+  const handleImport = async () => {
+    if (!restaurant?.id) return;
+    setImporting(true);
+    try {
+      const supabase = createClient();
+      const sampleReviews = [
+        { restaurant_id: restaurant.id, platform: "uber_eats", rating: 5, text: "Excelente comida e entrega rápida! Recomendo.", sentiment: "positive" },
+        { restaurant_id: restaurant.id, platform: "glovo", rating: 4, text: "Muito bom, mas demorou um pouco.", sentiment: "positive" },
+        { restaurant_id: restaurant.id, platform: "bolt_food", rating: 3, text: "Comida ok, embalagem podia ser melhor.", sentiment: "neutral" },
+        { restaurant_id: restaurant.id, platform: "uber_eats", rating: 2, text: "Pedido chegou frio. Mau serviço.", sentiment: "negative" },
+        { restaurant_id: restaurant.id, platform: "glovo", rating: 5, text: "O melhor restaurante da zona! Top.", sentiment: "positive" },
+        { restaurant_id: restaurant.id, platform: "bolt_food", rating: 4, text: "Bom custo benefício.", sentiment: "positive" },
+        { restaurant_id: restaurant.id, platform: "uber_eats", rating: 1, text: "Nunca mais peço aqui. Péssimo.", sentiment: "negative" },
+        { restaurant_id: restaurant.id, platform: "glovo", rating: 5, text: "Maravilhoso! Voltarei a pedir.", sentiment: "positive" },
+        { restaurant_id: restaurant.id, platform: "bolt_food", rating: 3, text: "Razoável, nada de especial.", sentiment: "neutral" },
+        { restaurant_id: restaurant.id, platform: "uber_eats", rating: 4, text: "Boa comida, delivery ok.", sentiment: "positive" },
+      ];
+      await supabase.from("reviews").insert(sampleReviews);
+      setImported(true);
+      setShowImport(false);
+    } catch {
+      // ignore
+    } finally {
+      setImporting(false);
+    }
   };
 
-  const distribution = [5, 4, 3, 2, 1].map((stars) => ({
-    stars,
-    count: reviews.filter((r) => r.rating === stars).length,
-    percentage:
-      reviews.length > 0
-        ? (reviews.filter((r) => r.rating === stars).length / reviews.length) * 100
-        : 0,
-  }));
-
-  const handleAdd = async () => {
-    if (!newReview.text) return;
-    const sentiment =
-      newReview.rating >= 4 ? "positive" : newReview.rating <= 2 ? "negative" : "neutral";
-    await addReview({ ...newReview, sentiment });
-    setNewReview({ platform: "uber_eats", rating: 5, text: "" });
-    setShowAddForm(false);
-  };
-
-  const handleRespond = async (id: string) => {
-    if (!responseText) return;
-    await respondToReview(id, responseText);
-    setRespondingId(null);
-    setResponseText("");
+  const handleRespond = (reviewText: string) => {
+    router.push("/dashboard/assistant");
+    sessionStorage.setItem(
+      "kivo_agent_context",
+      JSON.stringify({
+        action: "respond_review",
+        message: `Quero responder a esta review: "${reviewText}". Sugere uma resposta profissional.`,
+      })
+    );
   };
 
   if (loading) {
     return (
-      <div className="flex-1 space-y-6 p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 w-48 rounded bg-muted" />
-          <div className="grid gap-4 md:grid-cols-4">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-24 rounded-lg border bg-card" />
-            ))}
-          </div>
-        </div>
+      <div className="flex h-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-[#2CDF0C]" />
       </div>
     );
   }
 
-  return (
-    <div className="flex-1 space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Reviews</h1>
-          <p className="text-sm text-muted-foreground">
-            Monitoriza e responde às avaliações dos teus clientes.
-          </p>
-        </div>
-        <button
-          onClick={() => setShowAddForm(true)}
-          className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          + Review
-        </button>
-      </div>
+  const avgRating = reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
+  const positive = reviews.filter((r) => r.rating >= 4).length;
+  const negative = reviews.filter((r) => r.rating <= 2).length;
+  const positivePct = reviews.length > 0 ? (positive / reviews.length) * 100 : 0;
+  const negativePct = reviews.length > 0 ? (negative / reviews.length) * 100 : 0;
 
-      {/* Add form */}
-      {showAddForm && (
-        <div className="rounded-lg border bg-card p-4 shadow-sm">
-          <h3 className="text-sm font-semibold mb-3">Nova Review</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <select
-              value={newReview.platform}
-              onChange={(e) => setNewReview({ ...newReview, platform: e.target.value })}
-              className="flex h-10 rounded-md border bg-background px-3 py-2 text-sm"
-            >
-              <option value="uber_eats">Uber Eats</option>
-              <option value="glovo">Glovo</option>
-              <option value="bolt_food">Bolt Food</option>
-            </select>
-            <select
-              value={newReview.rating}
-              onChange={(e) => setNewReview({ ...newReview, rating: Number(e.target.value) })}
-              className="flex h-10 rounded-md border bg-background px-3 py-2 text-sm"
-            >
-              {[5, 4, 3, 2, 1].map((r) => (
-                <option key={r} value={r}>
-                  {r} estrela{r > 1 ? "s" : ""}
-                </option>
-              ))}
-            </select>
-            <input
-              type="text"
-              placeholder="Texto da review"
-              value={newReview.text}
-              onChange={(e) => setNewReview({ ...newReview, text: e.target.value })}
-              className="flex h-10 rounded-md border bg-background px-3 py-2 text-sm col-span-2 md:col-span-1"
-            />
-          </div>
-          <div className="flex gap-2 mt-3">
-            <button
-              onClick={handleAdd}
-              disabled={!newReview.text}
-              className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-4 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              Guardar
-            </button>
-            <button
-              onClick={() => setShowAddForm(false)}
-              className="inline-flex h-8 items-center justify-center rounded-md border px-4 text-xs font-medium hover:bg-accent"
-            >
-              Cancelar
-            </button>
+  const distribution = [5, 4, 3, 2, 1].map((star) => ({
+    star,
+    count: reviews.filter((r) => r.rating === star).length,
+    pct: reviews.length > 0 ? (reviews.filter((r) => r.rating === star).length / reviews.length) * 100 : 0,
+  }));
+
+  return (
+    <div className="flex h-full flex-col p-6">
+      {/* Import modal */}
+      {showImport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <span className="text-3xl">⭐</span>
+            <h2 className="mt-3 text-lg font-bold text-gray-900">Importar Reviews</h2>
+            <p className="mt-2 text-sm text-gray-500">
+              Quer importar as reviews atuais das plataformas de delivery para o Kivo?
+              Assim posso começar a analisar e otimizar imediatamente.
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => setShowImport(false)}
+                className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                Depois
+              </button>
+              <button
+                onClick={handleImport}
+                disabled={importing}
+                className="flex-1 rounded-xl bg-[#2CDF0C] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#23b80a] disabled:opacity-50"
+              >
+                {importing ? "A importar..." : "Importar"}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <div className="rounded-lg border bg-card p-4 shadow-sm text-center">
-          <div className="text-4xl font-bold text-primary">
-            {reviewStats.average.toFixed(1)}
-          </div>
-          <div className="text-sm text-muted-foreground">de 5 estrelas</div>
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-bold text-gray-900">Reviews</h1>
+          <p className="text-sm text-gray-500">{reviews.length} reviews</p>
         </div>
-        <div className="rounded-lg border bg-card p-4 shadow-sm text-center">
-          <div className="text-4xl font-bold">{reviewStats.total}</div>
-          <div className="text-sm text-muted-foreground">avaliações</div>
-        </div>
-        <div className="rounded-lg border bg-card p-4 shadow-sm text-center">
-          <div className="text-4xl font-bold text-green-600">
-            {reviewStats.total > 0
-              ? Math.round((reviewStats.positive / reviewStats.total) * 100)
-              : 0}
-            %
-          </div>
-          <div className="text-sm text-muted-foreground">4-5 estrelas</div>
-        </div>
-        <div className="rounded-lg border bg-card p-4 shadow-sm text-center">
-          <div className="text-4xl font-bold text-red-600">
-            {reviewStats.total > 0
-              ? Math.round((reviewStats.negative / reviewStats.total) * 100)
-              : 0}
-            %
-          </div>
-          <div className="text-sm text-muted-foreground">1-2 estrelas</div>
-        </div>
+        <button
+          onClick={() => handleRespond("Última review recebida")}
+          className="rounded-xl bg-[#2CDF0C] px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-[#23b80a]"
+        >
+          + Falar com Kivo
+        </button>
       </div>
 
-      {/* Distribution */}
-      <div className="rounded-lg border bg-card p-6 shadow-sm">
-        <h3 className="text-sm font-semibold mb-4">Distribuição</h3>
-        <div className="space-y-2">
-          {distribution.map((d) => (
-            <div key={d.stars} className="flex items-center gap-3">
-              <span className="w-8 text-sm text-right">{d.stars}★</span>
-              <div className="flex-1 h-4 rounded-full bg-muted overflow-hidden">
-                <div
-                  className="h-4 rounded-full bg-primary transition-all"
-                  style={{ width: `${d.percentage}%` }}
-                />
+      <div className="flex-1 overflow-y-auto space-y-4">
+        {/* Stats */}
+        <div className="grid grid-cols-4 gap-2">
+          <div className="rounded-lg border border-gray-200 bg-white p-3 text-center">
+            <p className="text-lg font-bold text-gray-900">{avgRating.toFixed(1)}★</p>
+            <p className="text-[11px] text-gray-500">Média</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-3 text-center">
+            <p className="text-lg font-bold text-gray-900">{reviews.length}</p>
+            <p className="text-[11px] text-gray-500">Total</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-3 text-center">
+            <p className="text-lg font-bold text-green-600">{positivePct.toFixed(0)}%</p>
+            <p className="text-[11px] text-gray-500">Positivas</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-3 text-center">
+            <p className="text-lg font-bold text-red-500">{negativePct.toFixed(0)}%</p>
+            <p className="text-[11px] text-gray-500">Negativas</p>
+          </div>
+        </div>
+
+        {/* Distribution */}
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <h3 className="mb-3 text-sm font-semibold text-gray-700">Distribuição</h3>
+          <div className="space-y-1.5">
+            {distribution.map((d) => (
+              <div key={d.star} className="flex items-center gap-2">
+                <span className="w-6 text-right text-xs text-gray-500">{d.star}★</span>
+                <div className="flex-1 h-2 overflow-hidden rounded-full bg-gray-100">
+                  <div className="h-full rounded-full bg-amber-400" style={{ width: `${d.pct}%` }} />
+                </div>
+                <span className="w-8 text-right text-xs text-gray-400">{d.count}</span>
               </div>
-              <span className="w-12 text-sm text-right text-muted-foreground">
-                {d.count}
-              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Reviews list */}
+        <div className="space-y-2">
+          {reviews.map((review) => (
+            <div key={review.id} className="rounded-xl border border-gray-200 bg-white p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-900">
+                      {"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}
+                    </span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                      review.rating >= 4 ? "bg-green-100 text-green-700" :
+                      review.rating <= 2 ? "bg-red-100 text-red-700" :
+                      "bg-gray-100 text-gray-600"
+                    }`}>
+                      {review.platform}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-gray-600">{review.text}</p>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center justify-between">
+                <span className="text-[11px] text-gray-400">
+                  {new Date(review.reviewed_at).toLocaleDateString("pt-PT")}
+                </span>
+                {!review.responded ? (
+                  <button
+                    onClick={() => handleRespond(review.text || "")}
+                    className="rounded-lg border border-gray-200 px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                  >
+                    Responder via Kivo
+                  </button>
+                ) : (
+                  <span className="text-xs text-green-600">Respondido</span>
+                )}
+              </div>
+              {review.response_text && (
+                <div className="mt-2 rounded-lg bg-gray-50 p-3">
+                  <p className="text-xs font-medium text-gray-500">Resposta:</p>
+                  <p className="mt-0.5 text-sm text-gray-700">{review.response_text}</p>
+                </div>
+              )}
             </div>
           ))}
-        </div>
-      </div>
-
-      {/* Reviews List */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold">Avaliações</h3>
-        {reviews.length === 0 ? (
-          <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
-            Sem reviews ainda. Adiciona a primeira review acima.
-          </div>
-        ) : (
-          reviews.map((r) => (
-            <div key={r.id} className="rounded-lg border bg-card p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium capitalize">
-                    {r.platform?.replace("_", " ")}
-                  </span>
-                  <span className="text-yellow-500">
-                    {"★".repeat(r.rating)}
-                    {"☆".repeat(5 - r.rating)}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                      r.sentiment === "positive"
-                        ? "bg-green-100 text-green-800"
-                        : r.sentiment === "negative"
-                          ? "bg-red-100 text-red-800"
-                          : "bg-yellow-100 text-yellow-800"
-                    }`}
-                  >
-                    {r.sentiment === "positive"
-                      ? "Positivo"
-                      : r.sentiment === "negative"
-                        ? "Negativo"
-                        : "Neutro"}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(r.reviewed_at).toLocaleDateString("pt-PT")}
-                  </span>
-                </div>
-              </div>
-              <p className="text-sm text-muted-foreground">{r.text}</p>
-
-              {r.responded && r.response_text && (
-                <div className="mt-2 rounded-md bg-muted p-2 text-xs">
-                  <span className="font-medium">Resposta:</span> {r.response_text}
-                </div>
-              )}
-
-              {respondingId === r.id ? (
-                <div className="mt-2 flex gap-2">
-                  <input
-                    type="text"
-                    value={responseText}
-                    onChange={(e) => setResponseText(e.target.value)}
-                    placeholder="A tua resposta..."
-                    className="flex-1 h-8 rounded border px-2 text-sm"
-                  />
-                  <button
-                    onClick={() => handleRespond(r.id)}
-                    className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground"
-                  >
-                    Enviar
-                  </button>
-                  <button
-                    onClick={() => setRespondingId(null)}
-                    className="inline-flex h-8 items-center justify-center rounded-md border px-3 text-xs font-medium"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              ) : (
-                !r.responded && (
-                  <button
-                    onClick={() => setRespondingId(r.id)}
-                    className="mt-2 text-xs text-primary hover:underline"
-                  >
-                    Responder
-                  </button>
-                )
-              )}
+          {reviews.length === 0 && (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 p-12 text-center">
+              <span className="text-4xl">⭐</span>
+              <h3 className="mt-3 font-medium text-gray-900">Sem reviews</h3>
+              <p className="mt-1 text-sm text-gray-500">Importa reviews das plataformas para começar.</p>
             </div>
-          ))
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

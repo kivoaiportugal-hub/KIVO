@@ -1,205 +1,109 @@
 "use client";
 
-import { useState } from "react";
-import { useRestaurant, usePromotions } from "@/hooks/use-data";
+import { usePromotions, useRestaurant } from "@/hooks/use-data";
+import { useRouter } from "next/navigation";
 
 export default function PromotionsPage() {
   const { restaurant } = useRestaurant();
-  const { promotions, loading, addPromotion, updatePromotion, deletePromotion } =
-    usePromotions(restaurant?.id);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newPromo, setNewPromo] = useState({
-    name: "",
-    platform: "todas",
-    discount_type: "percentage",
-    discount_value: 10,
-  });
+  const { promotions, loading } = usePromotions(restaurant?.id);
+  const router = useRouter();
 
-  const activePromos = promotions.filter((p) => p.status === "active");
-  const inactivePromos = promotions.filter((p) => p.status !== "active");
-
-  const handleAdd = async () => {
-    if (!newPromo.name) return;
-    await addPromotion(newPromo);
-    setNewPromo({ name: "", platform: "todas", discount_type: "percentage", discount_value: 10 });
-    setShowAddForm(false);
-  };
-
-  const handleToggleStatus = async (id: string, currentStatus: string) => {
-    await updatePromotion(id, {
-      status: currentStatus === "active" ? "paused" : "active",
-    });
+  const handleCreatePromo = () => {
+    router.push("/dashboard/assistant");
+    sessionStorage.setItem(
+      "kivo_agent_context",
+      JSON.stringify({
+        action: "create_promotion",
+        message:
+          "Quero criar uma promoção. Analisa o que faz mais sentido para o meu restaurante e propõe uma promoção com detalhes.",
+      })
+    );
   };
 
   if (loading) {
     return (
-      <div className="flex-1 space-y-6 p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 w-48 rounded bg-muted" />
-          <div className="h-48 rounded-lg border bg-card" />
-        </div>
+      <div className="flex h-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-[#2CDF0C]" />
       </div>
     );
   }
 
+  const active = promotions.filter((p) => p.status === "active");
+  const inactive = promotions.filter((p) => p.status !== "active");
+
   return (
-    <div className="flex-1 space-y-6 p-6">
-      <div className="flex items-center justify-between">
+    <div className="flex h-full flex-col p-6">
+      <div className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Promoções</h1>
-          <p className="text-sm text-muted-foreground">
-            Cria, gere e monitoriza as tuas promoções.
-          </p>
+          <h1 className="text-lg font-bold text-gray-900">Promoções</h1>
+          <p className="text-sm text-gray-500">{active.length} ativas · {inactive.length} inativas</p>
         </div>
         <button
-          onClick={() => setShowAddForm(true)}
-          className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          onClick={handleCreatePromo}
+          className="rounded-xl bg-[#2CDF0C] px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-[#23b80a]"
         >
-          + Nova Promoção
+          + Falar com Kivo
         </button>
       </div>
 
-      {/* Add form */}
-      {showAddForm && (
-        <div className="rounded-lg border bg-card p-4 shadow-sm">
-          <h3 className="text-sm font-semibold mb-3">Nova Promoção</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <input
-              type="text"
-              placeholder="Nome da promoção"
-              value={newPromo.name}
-              onChange={(e) => setNewPromo({ ...newPromo, name: e.target.value })}
-              className="flex h-10 rounded-md border bg-background px-3 py-2 text-sm col-span-2"
-            />
-            <select
-              value={newPromo.platform}
-              onChange={(e) => setNewPromo({ ...newPromo, platform: e.target.value })}
-              className="flex h-10 rounded-md border bg-background px-3 py-2 text-sm"
-            >
-              <option value="todas">Todas</option>
-              <option value="uber_eats">Uber Eats</option>
-              <option value="glovo">Glovo</option>
-              <option value="bolt_food">Bolt Food</option>
-            </select>
-            <div className="flex gap-2">
-              <select
-                value={newPromo.discount_type}
-                onChange={(e) => setNewPromo({ ...newPromo, discount_type: e.target.value })}
-                className="flex h-10 rounded-md border bg-background px-3 py-2 text-sm"
-              >
-                <option value="percentage">%</option>
-                <option value="fixed">€</option>
-                <option value="free_delivery">Free Delivery</option>
-              </select>
-              <input
-                type="number"
-                value={newPromo.discount_value}
-                onChange={(e) =>
-                  setNewPromo({ ...newPromo, discount_value: Number(e.target.value) })
-                }
-                className="flex h-10 w-20 rounded-md border bg-background px-3 py-2 text-sm"
-              />
+      <div className="flex-1 overflow-y-auto space-y-4">
+        {active.length > 0 && (
+          <section>
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">Ativas</h2>
+            <div className="space-y-2">
+              {active.map((promo) => (
+                <div key={promo.id} className="flex items-center justify-between rounded-xl border border-green-200 bg-green-50 p-4">
+                  <div>
+                    <h3 className="font-medium text-gray-900">{promo.name}</h3>
+                    <p className="text-sm text-gray-500">
+                      {promo.platform || "Todas"} · {promo.discount_type === "percent" ? `${promo.discount_value}%` : promo.discount_type === "free_delivery" ? "Entrega grátis" : `€${promo.discount_value}`}
+                    </p>
+                  </div>
+                  <div className="text-right text-sm">
+                    <p className="text-gray-700">{promo.orders_count || 0} pedidos</p>
+                    <p className="text-gray-500">€{(promo.revenue || 0).toFixed(2)}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
-          <div className="flex gap-2 mt-3">
-            <button
-              onClick={handleAdd}
-              disabled={!newPromo.name}
-              className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-4 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              Criar
-            </button>
-            <button
-              onClick={() => setShowAddForm(false)}
-              className="inline-flex h-8 items-center justify-center rounded-md border px-4 text-xs font-medium hover:bg-accent"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      )}
+          </section>
+        )}
 
-      {/* Active Promos */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold">
-          Promoções Ativas ({activePromos.length})
-        </h3>
-        {activePromos.length === 0 ? (
-          <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
-            Sem promoções ativas. Cria uma acima.
-          </div>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {activePromos.map((p) => (
-              <div key={p.id} className="rounded-lg border bg-card p-4 shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="font-medium">{p.name}</div>
-                  <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
-                    Ativa
+        {inactive.length > 0 && (
+          <section>
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">Inativas</h2>
+            <div className="space-y-2">
+              {inactive.map((promo) => (
+                <div key={promo.id} className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 p-4 opacity-70">
+                  <div>
+                    <h3 className="font-medium text-gray-900">{promo.name}</h3>
+                    <p className="text-sm text-gray-500">{promo.platform || "Todas"}</p>
+                  </div>
+                  <span className="rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-600">
+                    {promo.status || "draft"}
                   </span>
                 </div>
-                <div className="text-xs text-muted-foreground mb-3 capitalize">
-                  {p.platform?.replace("_", " ")} ·{" "}
-                  {p.discount_type === "percentage"
-                    ? `${p.discount_value}% off`
-                    : p.discount_type === "fixed"
-                      ? `€${p.discount_value} off`
-                      : "Free Delivery"}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleToggleStatus(p.id, p.status)}
-                    className="inline-flex h-8 flex-1 items-center justify-center rounded-md border px-4 text-xs font-medium hover:bg-accent"
-                  >
-                    Pausar
-                  </button>
-                  <button
-                    onClick={() => deletePromotion(p.id)}
-                    className="inline-flex h-8 items-center justify-center rounded-md border border-red-300 px-4 text-xs font-medium text-red-700 hover:bg-red-50"
-                  >
-                    Apagar
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          </section>
+        )}
+
+        {promotions.length === 0 && (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 p-12 text-center">
+            <span className="text-4xl">🎯</span>
+            <h3 className="mt-3 font-medium text-gray-900">Sem promoções</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              Fala com o Kivo para criar a tua primeira promoção.
+            </p>
+            <button
+              onClick={handleCreatePromo}
+              className="mt-4 rounded-xl bg-[#2CDF0C] px-4 py-2 text-sm font-medium text-white hover:bg-[#23b80a]"
+            >
+              Criar promoção
+            </button>
           </div>
         )}
       </div>
-
-      {/* Inactive Promos */}
-      {inactivePromos.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold">
-            Outras Promoções ({inactivePromos.length})
-          </h3>
-          <div className="grid gap-4 md:grid-cols-2">
-            {inactivePromos.map((p) => (
-              <div key={p.id} className="rounded-lg border bg-card p-4 shadow-sm opacity-60">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="font-medium">{p.name}</div>
-                  <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800">
-                    {p.status === "paused" ? "Pausada" : "Rascunho"}
-                  </span>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleToggleStatus(p.id, p.status)}
-                    className="inline-flex h-8 flex-1 items-center justify-center rounded-md bg-primary px-4 text-xs font-medium text-primary-foreground hover:bg-primary/90"
-                  >
-                    Ativar
-                  </button>
-                  <button
-                    onClick={() => deletePromotion(p.id)}
-                    className="inline-flex h-8 items-center justify-center rounded-md border border-red-300 px-4 text-xs font-medium text-red-700 hover:bg-red-50"
-                  >
-                    Apagar
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

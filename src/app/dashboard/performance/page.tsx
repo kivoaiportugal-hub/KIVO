@@ -3,52 +3,61 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRestaurant } from "@/hooks/use-data";
-import { KPICard } from "@/features/home/components/kpi-card";
+
+interface Order {
+  total: number;
+  platform: string;
+  ordered_at: string;
+}
 
 export default function PerformancePage() {
-  const supabase = createClient();
   const { restaurant } = useRestaurant();
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchOrders = async () => {
-      if (!restaurant?.id) {
+    if (!restaurant?.id) return;
+    const supabase = createClient();
+    supabase
+      .from("orders")
+      .select("total, platform, ordered_at")
+      .eq("restaurant_id", restaurant.id)
+      .order("ordered_at", { ascending: false })
+      .limit(500)
+      .then(({ data }) => {
+        setOrders(data || []);
         setLoading(false);
-        return;
-      }
-
-      const { data } = await supabase
-        .from("orders")
-        .select("*")
-        .eq("restaurant_id", restaurant.id)
-        .order("ordered_at", { ascending: false })
-        .limit(200);
-
-      setOrders(data || []);
-      setLoading(false);
-    };
-
-    fetchOrders();
+      });
   }, [restaurant?.id]);
 
-  // Calculate stats from real orders
-  const today = new Date().toDateString();
-  const todayOrders = orders.filter(
-    (o) => new Date(o.ordered_at).toDateString() === today
-  );
-  const todayRevenue = todayOrders.reduce((sum, o) => sum + (o.total || 0), 0);
-  const todayCount = todayOrders.length;
-  const avgTicket = todayCount > 0 ? todayRevenue / todayCount : 0;
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-[#2CDF0C]" />
+      </div>
+    );
+  }
 
-  // Platform breakdown
-  const platformMap: Record<string, { revenue: number; orders: number }> = {};
+  const totalRevenue = orders.reduce((s, o) => s + (o.total || 0), 0);
+  const totalOrders = orders.length;
+  const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+  const today = new Date().toDateString();
+  const todayOrders = orders.filter((o) => new Date(o.ordered_at).toDateString() === today);
+  const todayRevenue = todayOrders.reduce((s, o) => s + (o.total || 0), 0);
+
+  const yesterday = new Date(Date.now() - 86400000).toDateString();
+  const yesterdayOrders = orders.filter((o) => new Date(o.ordered_at).toDateString() === yesterday);
+  const yesterdayRevenue = yesterdayOrders.reduce((s, o) => s + (o.total || 0), 0);
+
+  const revenueChange = yesterdayRevenue > 0 ? ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100 : 0;
+  const ordersChange = yesterdayOrders.length > 0 ? ((todayOrders.length - yesterdayOrders.length) / yesterdayOrders.length) * 100 : 0;
+
+  const platformStats: Record<string, { count: number; revenue: number }> = {};
   orders.forEach((o) => {
-    if (!platformMap[o.platform]) {
-      platformMap[o.platform] = { revenue: 0, orders: 0 };
-    }
-    platformMap[o.platform].revenue += o.total || 0;
-    platformMap[o.platform].orders += 1;
+    if (!platformStats[o.platform]) platformStats[o.platform] = { count: 0, revenue: 0 };
+    platformStats[o.platform].count++;
+    platformStats[o.platform].revenue += o.total || 0;
   });
 
   const platformColors: Record<string, string> = {
@@ -63,140 +72,94 @@ export default function PerformancePage() {
     bolt_food: "Bolt Food",
   };
 
-  // Hourly breakdown (last 7 days)
-  const hourlyMap: Record<number, number> = {};
-  for (let h = 10; h <= 23; h++) hourlyMap[h] = 0;
+  const hourlyOrders: Record<number, number> = {};
   orders.forEach((o) => {
     const h = new Date(o.ordered_at).getHours();
-    if (hourlyMap[h] !== undefined) hourlyMap[h]++;
+    hourlyOrders[h] = (hourlyOrders[h] || 0) + 1;
   });
-  const hourlyData = Object.entries(hourlyMap).map(([h, count]) => ({
-    hour: `${h}h`,
-    orders: count,
-  }));
-  const maxOrders = Math.max(...hourlyData.map((d) => d.orders), 1);
-
-  if (loading) {
-    return (
-      <div className="flex-1 space-y-6 p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 w-48 rounded bg-muted" />
-          <div className="grid gap-4 md:grid-cols-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-28 rounded-lg border bg-card p-4" />
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const maxHourly = Math.max(...Object.values(hourlyOrders), 1);
 
   return (
-    <div className="flex-1 space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Performance</h1>
-        <p className="text-sm text-muted-foreground">
-          Análise detalhada do teu desempenho por plataforma e período.
-        </p>
-      </div>
+    <div className="h-full overflow-y-auto p-6">
+      <div className="mx-auto max-w-3xl space-y-6">
+        {/* KPIs */}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[
+            { label: "Receita Hoje", value: `€${todayRevenue.toFixed(2)}`, change: revenueChange },
+            { label: "Pedidos Hoje", value: todayOrders.length.toString(), change: ordersChange },
+            { label: "Ticket Médio", value: `€${avgTicket.toFixed(2)}`, change: null },
+            { label: "Total Receita", value: `€${totalRevenue.toFixed(2)}`, change: null },
+          ].map((kpi) => (
+            <div key={kpi.label} className="rounded-xl border border-gray-200 bg-white p-4">
+              <p className="text-xs text-gray-500">{kpi.label}</p>
+              <p className="mt-1 text-2xl font-bold text-gray-900">{kpi.value}</p>
+              {kpi.change !== null && (
+                <div className="mt-1 flex items-center gap-1">
+                  {kpi.change >= 0 ? (
+                    <span className="text-xs font-medium text-green-600">↑ {kpi.change.toFixed(0)}%</span>
+                  ) : (
+                    <span className="text-xs font-medium text-red-500">↓ {Math.abs(kpi.change).toFixed(0)}%</span>
+                  )}
+                  <span className="text-[10px] text-gray-400">vs ontem</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <KPICard
-          label="Receita Total"
-          value={`€${orders.reduce((s, o) => s + (o.total || 0), 0).toFixed(0)}`}
-          icon="💰"
-        />
-        <KPICard label="Total Pedidos" value={String(orders.length)} icon="📦" />
-        <KPICard
-          label="Ticket Médio"
-          value={
-            orders.length > 0
-              ? `€${(orders.reduce((s, o) => s + (o.total || 0), 0) / orders.length).toFixed(2)}`
-              : "€0"
-          }
-          icon="🎫"
-        />
-      </div>
-
-      {/* Platform Breakdown */}
-      <div className="rounded-lg border bg-card p-6 shadow-sm">
-        <h3 className="text-sm font-semibold mb-4">Por Plataforma</h3>
-        {Object.keys(platformMap).length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Sem dados de pedidos. Liga as tuas plataformas em{" "}
-            <a href="/dashboard/integrations" className="text-primary hover:underline">
-              Integrações
-            </a>
-            .
-          </p>
-        ) : (
-          <div className="space-y-4">
-            {Object.entries(platformMap).map(([platform, data]) => {
-              const maxRevenue = Math.max(...Object.values(platformMap).map((p) => p.revenue), 1);
+        {/* Platform breakdown */}
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <h3 className="mb-3 text-sm font-semibold text-gray-700">Por Plataforma</h3>
+          <div className="space-y-3">
+            {Object.entries(platformStats).map(([platform, stats]) => {
+              const pct = totalRevenue > 0 ? (stats.revenue / totalRevenue) * 100 : 0;
               return (
-                <div key={platform} className="flex items-center gap-4">
-                  <div
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold text-white"
-                    style={{ backgroundColor: platformColors[platform] || "#666" }}
-                  >
-                    {(platformNames[platform] || platform).charAt(0)}
+                <div key={platform}>
+                  <div className="mb-1 flex items-center justify-between text-sm">
+                    <span className="font-medium text-gray-700">
+                      {platformNames[platform] || platform}
+                    </span>
+                    <span className="text-gray-500">
+                      €{stats.revenue.toFixed(2)} · {stats.count} pedidos
+                    </span>
                   </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">
-                        {platformNames[platform] || platform}
-                      </span>
-                      <span className="text-sm font-bold">
-                        €{data.revenue.toFixed(0)}
-                      </span>
-                    </div>
-                    <div className="mt-1 h-2 w-full rounded-full bg-muted">
-                      <div
-                        className="h-2 rounded-full"
-                        style={{
-                          width: `${(data.revenue / maxRevenue) * 100}%`,
-                          backgroundColor: platformColors[platform] || "#666",
-                        }}
-                      />
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {data.orders} pedidos
-                    </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${pct}%`,
+                        backgroundColor: platformColors[platform] || "#9CA3AF",
+                      }}
+                    />
                   </div>
                 </div>
               );
             })}
+            {Object.keys(platformStats).length === 0 && (
+              <p className="text-sm text-gray-400">Sem dados de pedidos ainda.</p>
+            )}
           </div>
-        )}
-      </div>
+        </div>
 
-      {/* Hourly Chart */}
-      <div className="rounded-lg border bg-card p-6 shadow-sm">
-        <h3 className="text-sm font-semibold mb-4">Pedidos por Hora</h3>
-        {orders.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Sem dados de pedidos ainda.
-          </p>
-        ) : (
-          <div className="flex items-end gap-2 h-48">
-            {hourlyData.map((d) => (
-              <div
-                key={d.hour}
-                className="flex flex-1 flex-col items-center gap-1"
-              >
-                <div
-                  className="w-full rounded-t bg-primary/80 transition-all min-h-[2px]"
-                  style={{
-                    height: `${maxOrders > 0 ? (d.orders / maxOrders) * 100 : 0}%`,
-                  }}
-                />
-                <span className="text-[10px] text-muted-foreground">
-                  {d.hour}
-                </span>
-              </div>
-            ))}
+        {/* Hourly chart */}
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <h3 className="mb-3 text-sm font-semibold text-gray-700">Pedidos por Hora</h3>
+          <div className="flex items-end gap-1" style={{ height: 100 }}>
+            {Array.from({ length: 15 }, (_, i) => i + 9).map((hour) => {
+              const count = hourlyOrders[hour] || 0;
+              const height = (count / maxHourly) * 100;
+              return (
+                <div key={hour} className="flex flex-1 flex-col items-center gap-1">
+                  <div
+                    className="w-full rounded-t bg-[#2CDF0C]/30 transition-all"
+                    style={{ height: `${Math.max(height, 2)}%` }}
+                  />
+                  <span className="text-[9px] text-gray-400">{hour}h</span>
+                </div>
+              );
+            })}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

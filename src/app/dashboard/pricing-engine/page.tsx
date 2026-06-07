@@ -1,207 +1,145 @@
 "use client";
 
-import { useState } from "react";
-import { useRestaurant, useMenuItems } from "@/hooks/use-data";
+import { useMenuItems, useRestaurant } from "@/hooks/use-data";
+import { useRouter } from "next/navigation";
 
-export default function PricingEnginePage() {
+export default function PricingPage() {
   const { restaurant } = useRestaurant();
-  const { items } = useMenuItems(restaurant?.id);
-  const [simIncrease, setSimIncrease] = useState(10);
-  const [selectedItem, setSelectedItem] = useState<string>("");
+  const { items, loading } = useMenuItems(restaurant?.id);
+  const router = useRouter();
 
-  // Generate pricing suggestions from real menu items
+  const handleApplyPricing = (itemName: string) => {
+    router.push("/dashboard/assistant");
+    sessionStorage.setItem(
+      "kivo_agent_context",
+      JSON.stringify({
+        action: "adjust_pricing",
+        message: `Quero ajustar o preço do item "${itemName}". Analisa o mercado e sugere o melhor preço.`,
+      })
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-[#2CDF0C]" />
+      </div>
+    );
+  }
+
   const suggestions = items
-    .filter((item) => item.price > 0)
     .map((item) => {
-      // Simple heuristic: if margin < 60%, suggest price increase
-      const suggestedIncrease = item.margin_pct < 60 ? 0.50 : item.margin_pct < 70 ? 0.30 : 0.20;
-      const suggestedPrice = item.price + suggestedIncrease;
-      const potentialExtraRevenue = suggestedIncrease * (item.orders_count || 0);
+      const margin = item.margin_pct || 0;
+      let suggestedIncrease = 0;
+      let confidence = 0;
+
+      if (margin < 50) {
+        suggestedIncrease = 1.0;
+        confidence = 95;
+      } else if (margin < 60) {
+        suggestedIncrease = 0.5;
+        confidence = 88;
+      } else if (margin < 70) {
+        suggestedIncrease = 0.3;
+        confidence = 80;
+      } else {
+        suggestedIncrease = 0.15;
+        confidence = 65;
+      }
+
+      const suggestedPrice = (item.price || 0) + suggestedIncrease;
+      const monthlyImpact = suggestedIncrease * (item.orders_count || 0);
 
       return {
-        item: item.name,
-        currentPrice: item.price,
-        suggestedPrice: Math.round(suggestedPrice * 100) / 100,
-        impact: `+€${Math.round(potentialExtraRevenue)}/mês`,
-        confidence: item.margin_pct < 60 ? 92 : item.margin_pct < 70 ? 85 : 75,
-        reason:
-          item.margin_pct < 60
-            ? "Margem abaixo da média — aumento justificável"
-            : item.margin_pct < 70
-              ? "Margem adequada — aumento cautiously"
-              : "Margem boa — aumento pequeno possível",
-        margin: item.margin_pct,
+        ...item,
+        suggestedPrice,
+        suggestedIncrease,
+        confidence,
+        monthlyImpact,
       };
     })
-    .sort((a, b) => b.confidence - a.confidence);
+    .filter((s) => s.suggestedIncrease > 0)
+    .sort((a, b) => b.monthlyImpact - a.monthlyImpact);
 
-  // Simulator calculations
-  const simItem = items.find((i) => i.id === selectedItem) || items[0];
-  const simulatedRevenue = simItem
-    ? (simItem.revenue || 0) * (1 + simIncrease / 100)
-    : 0;
-  const simulatedOrders = simItem
-    ? Math.round((simItem.orders_count || 0) * (1 - simIncrease / 200))
-    : 0;
-  const impact = simItem ? simulatedRevenue - (simItem.revenue || 0) : 0;
-
-  // Competitor reference (placeholder — would come from external data)
-  const competitors = [
-    { name: "Média do mercado", avgPrice: 12.50, items: items.length },
-  ];
+  const totalPotential = suggestions.reduce((s, i) => s + i.monthlyImpact, 0);
 
   return (
-    <div className="flex-1 space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Pricing Engine</h1>
-        <p className="text-sm text-muted-foreground">
-          Recomendações inteligentes de preço com impacto estimado em euros.
-        </p>
+    <div className="flex h-full flex-col p-6">
+      <div className="mb-4">
+        <h1 className="text-lg font-bold text-gray-900">Pricing</h1>
+        <p className="text-sm text-gray-500">Sugestões de otimização de preços</p>
       </div>
 
-      {/* AI Suggestions */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold">Recomendações de Preço</h3>
-        {suggestions.length === 0 ? (
-          <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
-            Adiciona itens ao menu primeiro para receber sugestões de preço.
+      {/* Summary */}
+      <div className="mb-4 rounded-xl border border-[#2CDF0C]/20 bg-[#2CDF0C]/5 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-700">Potencial mensal extra</p>
+            <p className="text-2xl font-bold text-[#2CDF0C]">+€{totalPotential.toFixed(2)}</p>
           </div>
-        ) : (
-          suggestions.slice(0, 5).map((s) => (
-            <div key={s.item} className="rounded-lg border bg-card p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium">{s.item}</div>
-                  <div className="text-sm text-muted-foreground mt-1">
-                    {s.reason}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">
-                      €{s.currentPrice.toFixed(2)}
-                    </span>
-                    <svg
-                      className="h-4 w-4 text-muted-foreground"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M13 7l5 5m0 0l-5 5m5-5H6"
-                      />
-                    </svg>
-                    <span className="font-bold text-primary">
-                      €{s.suggestedPrice.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-sm font-medium text-green-600">
-                    {s.impact}
-                  </div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Confiança: {s.confidence}%
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Price Simulator */}
-      <div className="rounded-lg border bg-card p-6 shadow-sm">
-        <h3 className="text-sm font-semibold mb-4">Simulador de Impacto</h3>
-        {items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Adiciona itens ao menu para usar o simulador.
-          </p>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Item</label>
-                <select
-                  value={selectedItem || items[0]?.id || ""}
-                  onChange={(e) => setSelectedItem(e.target.value)}
-                  className="flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
-                >
-                  {items.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name} — €{item.price.toFixed(2)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Aumento: {simIncrease}%
-                </label>
-                <input
-                  type="range"
-                  min={0}
-                  max={30}
-                  value={simIncrease}
-                  onChange={(e) => setSimIncrease(Number(e.target.value))}
-                  className="w-full"
-                />
-              </div>
-            </div>
-            <div className="rounded-lg bg-muted/50 p-4 space-y-2">
-              <div className="text-sm text-muted-foreground">
-                Impacto Estimado
-              </div>
-              <div
-                className={`text-2xl font-bold ${
-                  impact >= 0 ? "text-green-600" : "text-red-600"
-                }`}
-              >
-                {impact >= 0 ? "+" : ""}€{impact.toFixed(0)}/mês
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Receita: €{simulatedRevenue.toFixed(0)} | Pedidos: ~
-                {simulatedOrders}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Menu Item Margins Overview */}
-      {items.length > 0 && (
-        <div className="rounded-lg border bg-card p-6 shadow-sm">
-          <h3 className="text-sm font-semibold mb-4">
-            Margens por Item
-          </h3>
-          <div className="space-y-2">
-            {items
-              .sort((a, b) => (a.margin_pct || 0) - (b.margin_pct || 0))
-              .slice(0, 10)
-              .map((item) => (
-                <div key={item.id} className="flex items-center gap-3">
-                  <span className="w-40 text-sm truncate">{item.name}</span>
-                  <div className="flex-1 h-3 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className={`h-3 rounded-full ${
-                        (item.margin_pct || 0) >= 70
-                          ? "bg-green-500"
-                          : (item.margin_pct || 0) >= 60
-                            ? "bg-yellow-500"
-                            : "bg-red-500"
-                      }`}
-                      style={{ width: `${Math.min(item.margin_pct || 0, 100)}%` }}
-                    />
-                  </div>
-                  <span className="w-12 text-sm text-right font-medium">
-                    {(item.margin_pct || 0).toFixed(0)}%
-                  </span>
-                </div>
-              ))}
-          </div>
+          <span className="text-3xl">💰</span>
         </div>
-      )}
+      </div>
+
+      {/* Suggestions table */}
+      <div className="flex-1 overflow-hidden rounded-xl border border-gray-200 bg-white">
+        <div className="h-full overflow-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="sticky top-0 border-b border-gray-100 bg-gray-50">
+              <tr>
+                <th className="px-4 py-2.5 font-medium text-gray-500">Item</th>
+                <th className="px-4 py-2.5 font-medium text-gray-500">Preço Atual</th>
+                <th className="px-4 py-2.5 font-medium text-gray-500">Preço Sugerido</th>
+                <th className="px-4 py-2.5 font-medium text-gray-500">Impacto €/mês</th>
+                <th className="px-4 py-2.5 font-medium text-gray-500">Confiança</th>
+                <th className="px-4 py-2.5 font-medium text-gray-500">Ação</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {suggestions.map((item) => (
+                <tr key={item.id} className="hover:bg-gray-50/50">
+                  <td className="px-4 py-2.5 font-medium text-gray-900">{item.name}</td>
+                  <td className="px-4 py-2.5 text-gray-500">€{(item.price || 0).toFixed(2)}</td>
+                  <td className="px-4 py-2.5 font-medium text-green-600">
+                    €{item.suggestedPrice.toFixed(2)}
+                  </td>
+                  <td className="px-4 py-2.5 font-medium text-green-600">
+                    +€{item.monthlyImpact.toFixed(2)}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span
+                      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                        item.confidence >= 85
+                          ? "bg-green-100 text-green-700"
+                          : item.confidence >= 70
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {item.confidence}%
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <button
+                      onClick={() => handleApplyPricing(item.name)}
+                      className="rounded-lg bg-[#2CDF0C] px-3 py-1 text-xs font-medium text-white hover:bg-[#23b80a]"
+                    >
+                      Aplicar via Kivo
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {suggestions.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                    Sem sugestões de preço. Adiciona itens ao menu primeiro.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
