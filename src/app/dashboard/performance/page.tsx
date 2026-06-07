@@ -1,30 +1,96 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useRestaurant } from "@/hooks/use-data";
 import { KPICard } from "@/features/home/components/kpi-card";
 
-const platformData = [
-  { name: "Uber Eats", revenue: "€4,230", orders: 298, change: 12, color: "#06C167" },
-  { name: "Glovo", revenue: "€3,120", orders: 234, change: -5, color: "#000000" },
-  { name: "Bolt Food", revenue: "€1,890", orders: 156, change: 20, color: "#2DB5A0" },
-];
-
-const hourlyData = [
-  { hour: "12h", orders: 12, revenue: 168 },
-  { hour: "13h", orders: 18, revenue: 252 },
-  { hour: "14h", orders: 8, revenue: 112 },
-  { hour: "15h", orders: 5, revenue: 70 },
-  { hour: "16h", orders: 6, revenue: 84 },
-  { hour: "17h", orders: 10, revenue: 140 },
-  { hour: "18h", orders: 22, revenue: 308 },
-  { hour: "19h", orders: 28, revenue: 392 },
-  { hour: "20h", orders: 25, revenue: 350 },
-  { hour: "21h", orders: 15, revenue: 210 },
-  { hour: "22h", orders: 8, revenue: 112 },
-];
-
-const maxOrders = Math.max(...hourlyData.map((d) => d.orders));
-
 export default function PerformancePage() {
+  const supabase = createClient();
+  const { restaurant } = useRestaurant();
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchOrders = async () => {
+      if (!restaurant?.id) {
+        setLoading(false);
+        return;
+      }
+
+      const { data } = await supabase
+        .from("orders")
+        .select("*")
+        .eq("restaurant_id", restaurant.id)
+        .order("ordered_at", { ascending: false })
+        .limit(200);
+
+      setOrders(data || []);
+      setLoading(false);
+    };
+
+    fetchOrders();
+  }, [restaurant?.id]);
+
+  // Calculate stats from real orders
+  const today = new Date().toDateString();
+  const todayOrders = orders.filter(
+    (o) => new Date(o.ordered_at).toDateString() === today
+  );
+  const todayRevenue = todayOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+  const todayCount = todayOrders.length;
+  const avgTicket = todayCount > 0 ? todayRevenue / todayCount : 0;
+
+  // Platform breakdown
+  const platformMap: Record<string, { revenue: number; orders: number }> = {};
+  orders.forEach((o) => {
+    if (!platformMap[o.platform]) {
+      platformMap[o.platform] = { revenue: 0, orders: 0 };
+    }
+    platformMap[o.platform].revenue += o.total || 0;
+    platformMap[o.platform].orders += 1;
+  });
+
+  const platformColors: Record<string, string> = {
+    uber_eats: "#06C167",
+    glovo: "#000000",
+    bolt_food: "#2DB5A0",
+  };
+
+  const platformNames: Record<string, string> = {
+    uber_eats: "Uber Eats",
+    glovo: "Glovo",
+    bolt_food: "Bolt Food",
+  };
+
+  // Hourly breakdown (last 7 days)
+  const hourlyMap: Record<number, number> = {};
+  for (let h = 10; h <= 23; h++) hourlyMap[h] = 0;
+  orders.forEach((o) => {
+    const h = new Date(o.ordered_at).getHours();
+    if (hourlyMap[h] !== undefined) hourlyMap[h]++;
+  });
+  const hourlyData = Object.entries(hourlyMap).map(([h, count]) => ({
+    hour: `${h}h`,
+    orders: count,
+  }));
+  const maxOrders = Math.max(...hourlyData.map((d) => d.orders), 1);
+
+  if (loading) {
+    return (
+      <div className="flex-1 space-y-6 p-6">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 w-48 rounded bg-muted" />
+          <div className="grid gap-4 md:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-28 rounded-lg border bg-card p-4" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 space-y-6 p-6">
       <div>
@@ -35,63 +101,102 @@ export default function PerformancePage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <KPICard label="Receita Total" value="€9,240" change={8} icon="💰" />
-        <KPICard label="Total Pedidos" value="688" change={11} icon="📦" />
-        <KPICard label="Ticket Médio" value="€13.43" change={2.1} icon="🎫" />
+        <KPICard
+          label="Receita Total"
+          value={`€${orders.reduce((s, o) => s + (o.total || 0), 0).toFixed(0)}`}
+          icon="💰"
+        />
+        <KPICard label="Total Pedidos" value={String(orders.length)} icon="📦" />
+        <KPICard
+          label="Ticket Médio"
+          value={
+            orders.length > 0
+              ? `€${(orders.reduce((s, o) => s + (o.total || 0), 0) / orders.length).toFixed(2)}`
+              : "€0"
+          }
+          icon="🎫"
+        />
       </div>
 
       {/* Platform Breakdown */}
       <div className="rounded-lg border bg-card p-6 shadow-sm">
         <h3 className="text-sm font-semibold mb-4">Por Plataforma</h3>
-        <div className="space-y-4">
-          {platformData.map((p) => (
-            <div key={p.name} className="flex items-center gap-4">
-              <div
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold text-white"
-                style={{ backgroundColor: p.color }}
-              >
-                {p.name.charAt(0)}
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">{p.name}</span>
-                  <span className="text-sm font-bold">{p.revenue}</span>
-                </div>
-                <div className="mt-1 h-2 w-full rounded-full bg-muted">
+        {Object.keys(platformMap).length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Sem dados de pedidos. Liga as tuas plataformas em{" "}
+            <a href="/dashboard/integrations" className="text-primary hover:underline">
+              Integrações
+            </a>
+            .
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {Object.entries(platformMap).map(([platform, data]) => {
+              const maxRevenue = Math.max(...Object.values(platformMap).map((p) => p.revenue), 1);
+              return (
+                <div key={platform} className="flex items-center gap-4">
                   <div
-                    className="h-2 rounded-full"
-                    style={{
-                      width: `${(parseInt(p.revenue.replace(/[€,]/g, "")) / 4230) * 100}%`,
-                      backgroundColor: p.color,
-                    }}
-                  />
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold text-white"
+                    style={{ backgroundColor: platformColors[platform] || "#666" }}
+                  >
+                    {(platformNames[platform] || platform).charAt(0)}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">
+                        {platformNames[platform] || platform}
+                      </span>
+                      <span className="text-sm font-bold">
+                        €{data.revenue.toFixed(0)}
+                      </span>
+                    </div>
+                    <div className="mt-1 h-2 w-full rounded-full bg-muted">
+                      <div
+                        className="h-2 rounded-full"
+                        style={{
+                          width: `${(data.revenue / maxRevenue) * 100}%`,
+                          backgroundColor: platformColors[platform] || "#666",
+                        }}
+                      />
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {data.orders} pedidos
+                    </div>
+                  </div>
                 </div>
-                <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{p.orders} pedidos</span>
-                  <span className={p.change >= 0 ? "text-green-600" : "text-red-600"}>
-                    {p.change >= 0 ? "+" : ""}{p.change}%
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Hourly Chart */}
       <div className="rounded-lg border bg-card p-6 shadow-sm">
-        <h3 className="text-sm font-semibold mb-4">Pedidos por Hora (Hoje)</h3>
-        <div className="flex items-end gap-2 h-48">
-          {hourlyData.map((d) => (
-            <div key={d.hour} className="flex flex-1 flex-col items-center gap-1">
+        <h3 className="text-sm font-semibold mb-4">Pedidos por Hora</h3>
+        {orders.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Sem dados de pedidos ainda.
+          </p>
+        ) : (
+          <div className="flex items-end gap-2 h-48">
+            {hourlyData.map((d) => (
               <div
-                className="w-full rounded-t bg-primary/80 transition-all"
-                style={{ height: `${(d.orders / maxOrders) * 100}%` }}
-              />
-              <span className="text-[10px] text-muted-foreground">{d.hour}</span>
-            </div>
-          ))}
-        </div>
+                key={d.hour}
+                className="flex flex-1 flex-col items-center gap-1"
+              >
+                <div
+                  className="w-full rounded-t bg-primary/80 transition-all min-h-[2px]"
+                  style={{
+                    height: `${maxOrders > 0 ? (d.orders / maxOrders) * 100 : 0}%`,
+                  }}
+                />
+                <span className="text-[10px] text-muted-foreground">
+                  {d.hour}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
