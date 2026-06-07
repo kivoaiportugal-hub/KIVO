@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { SubscriptionProvider } from "@/features/billing/subscription-provider";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -65,7 +66,9 @@ export default function DashboardLayout({
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <main className="flex-1 overflow-y-auto">
+        <SubscriptionProvider>{children}</SubscriptionProvider>
+      </main>
     </div>
   );
 }
