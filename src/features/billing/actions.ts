@@ -62,7 +62,7 @@ export async function createCheckoutSession(planId: PlanId, interval: "monthly" 
     mode: "subscription",
     payment_method_types: ["card"],
     line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${appUrl}/dashboard/billing?session_id={CHECKOUT_SESSION_ID}`,
+    success_url: `${appUrl}/dashboard/billing/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${appUrl}/dashboard/billing`,
     metadata: {
       user_id: user.id,
