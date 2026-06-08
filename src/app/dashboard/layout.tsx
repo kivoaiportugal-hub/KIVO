@@ -20,6 +20,7 @@ import {
   BellIcon,
   MenuMobileIcon,
   CloseIcon,
+  BillingIcon,
 } from "@/components/icons";
 
 const mainNav = [
@@ -33,6 +34,7 @@ const mainNav = [
 
 const bottomNav = [
   { name: "Definições", href: "/dashboard/settings", icon: SettingsIcon },
+  { name: "Subscrição", href: "/dashboard/billing", icon: BillingIcon },
   { name: "Suporte", href: "/dashboard/support", icon: SupportIcon },
 ];
 

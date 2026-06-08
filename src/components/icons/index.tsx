@@ -262,3 +262,14 @@ export function ExternalLinkIcon({ className, size = 16 }: { className?: string;
     </svg>
   );
 }
+
+export function BillingIcon({ active, className, size = 24 }: IconProps) {
+  const color = active ? ACTIVE : INACTIVE;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <rect x="2" y="5" width="20" height="14" rx="2" stroke={color} strokeWidth="1.8" fill="none" />
+      <line x1="2" y1="10" x2="22" y2="10" stroke={color} strokeWidth="1.8" />
+      <rect x="5" y="14" width="6" height="2" rx="1" fill={color} opacity="0.4" />
+    </svg>
+  );
+}
