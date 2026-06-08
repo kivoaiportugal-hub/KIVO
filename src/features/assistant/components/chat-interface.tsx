@@ -24,9 +24,16 @@ export function ChatInterface() {
   useEffect(() => {
     const loadHistory = async () => {
       try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setLoadingHistory(false);
+          return;
+        }
+
         const { data } = await supabase
           .from("chat_messages")
           .select("role, content")
+          .eq("user_id", user.id)
           .order("created_at", { ascending: true })
           .limit(50);
 
@@ -64,15 +71,19 @@ export function ChatInterface() {
     setInput("");
     setIsLoading(true);
 
-    // Save user message to Supabase
-    try {
+  // Save user message to Supabase
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
       await supabase.from("chat_messages").insert({
+        user_id: user.id,
         role: "user",
         content: userMessage.content,
       });
-    } catch {
-      // Table might not exist yet — continue anyway
     }
+  } catch {
+    // Table might not exist yet — continue anyway
+  }
 
     try {
       const response = await fetch("/api/ai/chat", {
@@ -133,10 +144,14 @@ export function ChatInterface() {
       // Save assistant message to Supabase
       if (assistantContent) {
         try {
-          await supabase.from("chat_messages").insert({
-            role: "assistant",
-            content: assistantContent,
-          });
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            await supabase.from("chat_messages").insert({
+              user_id: user.id,
+              role: "assistant",
+              content: assistantContent,
+            });
+          }
         } catch {
           // Table might not exist yet
         }
@@ -170,7 +185,10 @@ export function ChatInterface() {
       },
     ]);
     try {
-      await supabase.from("chat_messages").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from("chat_messages").delete().eq("user_id", user.id);
+      }
     } catch {
       // Table might not exist yet
     }
