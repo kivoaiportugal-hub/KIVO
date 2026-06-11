@@ -9,7 +9,7 @@ export function SidebarUser() {
 
   const name = user?.full_name || user?.email?.split("@")[0] || "Utilizador";
   const restaurantName = restaurant?.name || name;
-  const plan = restaurant?.plan || "grow";
+  const plan = restaurant?.onboarding_plan || "grow";
 
   return (
     <div className="flex items-center gap-3 rounded-md px-3 py-2 text-sm">
