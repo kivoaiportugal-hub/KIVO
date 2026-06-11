@@ -30,7 +30,7 @@ export function SubscriptionProvider({
   children: React.ReactNode;
 }) {
   const { restaurant } = useData();
-  const plan = (restaurant?.plan || "grow") as PlanId;
+  const plan = (restaurant?.onboarding_plan || "grow") as PlanId;
 
   return (
     <SubscriptionContext.Provider
