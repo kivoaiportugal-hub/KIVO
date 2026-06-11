@@ -7,11 +7,12 @@ export function ChatInterface() {
   const { chatMessages, addChatMessage, clearChat } = useData();
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [streamingContent, setStreamingContent] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatMessages]);
+  }, [chatMessages, streamingContent]);
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
@@ -20,17 +21,18 @@ export function ChatInterface() {
     addChatMessage(userMessage);
     setInput("");
     setIsLoading(true);
+    setStreamingContent("");
 
     try {
+      const allMessages = [...chatMessages, userMessage].map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
       const response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [...chatMessages, userMessage].map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-        }),
+        body: JSON.stringify({ messages: allMessages }),
       });
 
       if (!response.ok) throw new Error("Failed");
@@ -39,9 +41,7 @@ export function ChatInterface() {
       if (!reader) return;
 
       const decoder = new TextDecoder();
-      let assistantContent = "";
-
-      addChatMessage({ role: "assistant", content: "" });
+      let fullContent = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -58,33 +58,24 @@ export function ChatInterface() {
             try {
               const parsed = JSON.parse(data);
               if (parsed.content) {
-                assistantContent += parsed.content;
-                // Update last message
-                const messages = useData.getState().chatMessages;
-                const updated = [...messages];
-                updated[updated.length - 1] = {
-                  role: "assistant",
-                  content: assistantContent,
-                };
-                // We need to use a different approach since addChatMessage appends
+                fullContent += parsed.content;
+                setStreamingContent(fullContent);
               }
             } catch {}
           }
         }
       }
 
-      // Final update
-      if (assistantContent) {
-        // Remove the empty assistant message and add the full one
-        const messages = useData.getState().chatMessages;
-        const updated = [...messages.slice(0, -1), { role: "assistant", content: assistantContent }];
-        // Use a workaround: clear and re-add
+      if (fullContent) {
+        addChatMessage({ role: "assistant", content: fullContent });
       }
+      setStreamingContent("");
     } catch {
       addChatMessage({
         role: "assistant",
         content: "Desculpa, ocorreu um erro. Tenta novamente.",
       });
+      setStreamingContent("");
     } finally {
       setIsLoading(false);
     }
@@ -97,11 +88,14 @@ export function ChatInterface() {
     }
   };
 
+  const displayMessages = streamingContent
+    ? [...chatMessages, { role: "assistant" as const, content: streamingContent }]
+    : chatMessages;
+
   return (
     <div className="flex h-full flex-col">
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {chatMessages.map((message, index) => (
+        {displayMessages.map((message, index) => (
           <div
             key={index}
             className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
@@ -114,20 +108,26 @@ export function ChatInterface() {
               }`}
             >
               <div className="whitespace-pre-wrap">{message.content}</div>
-              {message.role === "assistant" && index === chatMessages.length - 1 && isLoading && (
-                <div className="mt-2 flex gap-1">
-                  <div className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.3s]" />
-                  <div className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.15s]" />
-                  <div className="h-2 w-2 animate-bounce rounded-full bg-gray-400" />
-                </div>
+              {message.role === "assistant" && index === displayMessages.length - 1 && isLoading && streamingContent && (
+                <div className="mt-1 inline-block h-3 w-1 animate-pulse bg-gray-400" />
               )}
             </div>
           </div>
         ))}
+        {isLoading && !streamingContent && (
+          <div className="flex justify-start">
+            <div className="rounded-lg bg-gray-100 px-4 py-3 text-sm">
+              <div className="flex gap-1">
+                <div className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.3s]" />
+                <div className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.15s]" />
+                <div className="h-2 w-2 animate-bounce rounded-full bg-gray-400" />
+              </div>
+            </div>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
       <div className="border-t border-gray-100 p-4">
         <div className="flex gap-2">
           <textarea
