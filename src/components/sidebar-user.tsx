@@ -7,7 +7,7 @@ export function SidebarUser() {
   const { user } = useAuth();
   const { restaurant } = useData();
 
-  const name = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Utilizador";
+  const name = user?.full_name || user?.email?.split("@")[0] || "Utilizador";
   const restaurantName = restaurant?.name || name;
   const plan = restaurant?.plan || "grow";
 
