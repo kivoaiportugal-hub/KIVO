@@ -2,7 +2,8 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/lib/auth/mock-auth";
+import { useData } from "@/lib/mock-data-provider";
 import type { OnboardingData, OnboardingStep } from "../lib/types";
 import {
   ONBOARDING_STEPS,
@@ -21,7 +22,7 @@ import { StepResults } from "./step-results";
 
 export function OnboardingWizard() {
   const router = useRouter();
-  const supabase = createClient();
+  const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const [data, setData] = useState<OnboardingData>(initialOnboardingData);
   const [saving, setSaving] = useState(false);
@@ -75,54 +76,7 @@ export function OnboardingWizard() {
       const score = calculateMaturityScore(data);
       const recommendedPlan = getRecommendedPlan(score);
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        setError("Utilizador não autenticado.");
-        setSaving(false);
-        return;
-      }
-
-      // Save to restaurants table
-      const { error: restaurantError } = await supabase.from("restaurants").upsert(
-        {
-          user_id: user.id,
-          name: data.restaurantName,
-          cuisine_type: data.cuisineType,
-          city: data.city,
-          platforms: data.platforms,
-          daily_orders: data.dailyOrders,
-          monthly_revenue: data.monthlyRevenue ? Number(data.monthlyRevenue) : null,
-          avg_ticket: data.avgTicket ? Number(data.avgTicket) : null,
-          team_size: data.teamSize,
-          has_delivery_manager: data.hasDeliveryManager,
-          challenges: data.challenges,
-          onboarding_score: score,
-          onboarding_plan: recommendedPlan,
-          onboarding_completed: true,
-        },
-        { onConflict: "user_id" }
-      );
-
-      if (restaurantError) {
-        console.error("Restaurant save error:", restaurantError);
-        setError("Erro ao guardar restaurante: " + restaurantError.message);
-        setSaving(false);
-        return;
-      }
-
-      // Also update user metadata for quick access
-      await supabase.auth.updateUser({
-        data: {
-          onboarding_completed: true,
-          onboarding_score: score,
-          onboarding_plan: recommendedPlan,
-          restaurant_name: data.restaurantName,
-        },
-      });
-
+      // Mock: just redirect to dashboard
       window.location.href = "/dashboard/assistant";
     } catch (err) {
       console.error("Onboarding error:", err);
@@ -131,16 +85,8 @@ export function OnboardingWizard() {
     }
   };
 
-  const handleSkip = async () => {
-    setSaving(true);
-    try {
-      await supabase.auth.updateUser({
-        data: { onboarding_completed: true },
-      });
-      window.location.href = "/dashboard/assistant";
-    } catch {
-      window.location.href = "/dashboard/assistant";
-    }
+  const handleSkip = () => {
+    window.location.href = "/dashboard/assistant";
   };
 
   return (

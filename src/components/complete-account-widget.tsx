@@ -1,39 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRestaurant, useUser, useMenuItems, useReviews } from "@/hooks/use-data";
-import { useSubscription } from "@/features/billing/subscription-provider";
+import { useState } from "react";
+import { useData } from "@/lib/mock-data-provider";
+import { useAuth } from "@/lib/auth/mock-auth";
 import Link from "next/link";
 
-interface Step {
-  id: string;
-  label: string;
-  completed: boolean;
-  href?: string;
-}
-
 export function CompleteAccountWidget() {
-  const { user } = useUser();
-  const { restaurant } = useRestaurant();
-  const { items } = useMenuItems(restaurant?.id);
-  const { reviews } = useReviews(restaurant?.id);
-  const { plan, isActive, isTrialing } = useSubscription();
+  const { restaurant, menuItems, reviews } = useData();
+  const { user } = useAuth();
   const [expanded, setExpanded] = useState(true);
   const [dismissed, setDismissed] = useState(false);
 
-  const steps: Step[] = [
+  const steps = [
     { id: "account", label: "Criar conta", completed: true },
-    { id: "plan", label: "Escolher plano", completed: isActive || isTrialing },
+    { id: "plan", label: "Escolher plano", completed: true },
     { id: "onboarding", label: "Completar onboarding", completed: restaurant?.onboarding_completed || false },
     { id: "platforms", label: "Conectar plataformas", completed: (restaurant?.platforms?.length || 0) > 0, href: "/dashboard/settings" },
-    { id: "menu", label: "Importar menu", completed: items.length > 0, href: "/dashboard/assistant" },
+    { id: "menu", label: "Importar menu", completed: menuItems.length > 0, href: "/dashboard/assistant" },
     { id: "reviews", label: "Importar reviews", completed: reviews.length > 0, href: "/dashboard/reviews" },
   ];
 
   const completedCount = steps.filter((s) => s.completed).length;
   const pct = Math.round((completedCount / steps.length) * 100);
 
-  if (dismissed || steps.length === 0 || pct === 100) return null;
+  if (dismissed || pct === 100) return null;
 
   return (
     <div className="fixed bottom-4 right-4 z-40 w-72 rounded-2xl border border-gray-200 bg-white shadow-xl">
@@ -57,7 +47,6 @@ export function CompleteAccountWidget() {
           >
             ✕
           </button>
-          <span className="text-xs text-gray-400">{expanded ? "▼" : "▲"}</span>
         </div>
       </button>
 

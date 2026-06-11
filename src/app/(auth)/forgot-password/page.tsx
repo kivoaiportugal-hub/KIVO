@@ -2,32 +2,20 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 export default function ForgotPasswordPage() {
-  const supabase = createClient();
   const [email, setEmail] = useState("");
-  const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError("");
-
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/reset-password`,
-    });
-
-    if (error) {
-      setError(error.message);
+    // Mock: always succeeds
+    setTimeout(() => {
+      setSuccess(true);
       setLoading(false);
-      return;
-    }
-
-    setSuccess(true);
-    setLoading(false);
+    }, 500);
   };
 
   return (
@@ -45,12 +33,6 @@ export default function ForgotPasswordPage() {
         </div>
 
         <div className="rounded-lg border bg-card p-6 shadow-sm space-y-4">
-          {error && (
-            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-              {error}
-            </div>
-          )}
-
           {success ? (
             <div className="rounded-md bg-primary/10 p-3 text-sm text-primary">
               Email enviado! Verifica a tua caixa de entrada.

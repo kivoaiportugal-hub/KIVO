@@ -3,10 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { SubscriptionProvider } from "@/features/billing/subscription-provider";
-import { SidebarUser } from "@/components/sidebar-user";
+import { useData } from "@/lib/mock-data-provider";
 import { CompleteAccountWidget } from "@/components/complete-account-widget";
-import { useAlerts, useRestaurant } from "@/hooks/use-data";
 import {
   AssistantIcon,
   PerformanceIcon,
@@ -39,9 +37,8 @@ const bottomNav = [
 ];
 
 function UnreadBadge() {
-  const { restaurant } = useRestaurant();
-  const { alerts } = useAlerts(restaurant?.id);
-  const unread = alerts.filter((a: { read: boolean }) => !a.read).length;
+  const { alerts } = useData();
+  const unread = alerts.filter((a) => !a.read).length;
   if (unread === 0) return null;
   return (
     <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
@@ -179,7 +176,7 @@ export default function DashboardLayout({
 
         {/* Page content */}
         <main className="flex-1 overflow-hidden">
-          <SubscriptionProvider>{children}</SubscriptionProvider>
+          {children}
         </main>
       </div>
 

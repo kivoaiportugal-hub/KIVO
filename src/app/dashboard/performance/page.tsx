@@ -1,50 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { useRestaurant } from "@/hooks/use-data";
+import { useData } from "@/lib/mock-data-provider";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line,
 } from "recharts";
 
-interface Order {
-  total: number;
-  platform: string;
-  ordered_at: string;
-}
-
 export default function PerformancePage() {
-  const { restaurant } = useRestaurant();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { orders } = useData();
   const [period, setPeriod] = useState<"week" | "month" | "all">("week");
 
-  useEffect(() => {
-    if (!restaurant?.id) { setLoading(false); return; }
-    const supabase = createClient();
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("orders")
-          .select("total, platform, ordered_at")
-          .eq("restaurant_id", restaurant.id)
-          .order("ordered_at", { ascending: false })
-          .limit(1000);
-        if (!error) setOrders(data || []);
-      } catch {} finally { setLoading(false); }
-    })();
-  }, [restaurant?.id]);
-
-  if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-[#2CDF0C]" />
-      </div>
-    );
-  }
-
-  // Filter by period
   const now = new Date();
   const filtered = orders.filter((o) => {
     const d = new Date(o.ordered_at);
@@ -68,7 +34,7 @@ export default function PerformancePage() {
   const revenueChange = yesterdayRevenue > 0 ? ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100 : 0;
   const ordersChange = yesterdayOrders.length > 0 ? ((todayOrders.length - yesterdayOrders.length) / yesterdayOrders.length) * 100 : 0;
 
-  // Daily revenue data for line chart
+  // Daily revenue data
   const dailyData: Record<string, number> = {};
   filtered.forEach((o) => {
     const date = o.ordered_at.split("T")[0];
@@ -107,7 +73,7 @@ export default function PerformancePage() {
     color: platformColors[platform] || "#9CA3AF",
   }));
 
-  // Hourly orders for bar chart
+  // Hourly orders
   const hourlyOrders: Record<number, number> = {};
   filtered.forEach((o) => {
     const h = new Date(o.ordered_at).getHours();
@@ -144,14 +110,14 @@ export default function PerformancePage() {
         {/* KPIs */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[
-            { label: "Receita Hoje", value: `€${todayRevenue.toFixed(2)}`, change: revenueChange, color: "text-gray-900" },
-            { label: "Pedidos Hoje", value: todayOrders.length.toString(), change: ordersChange, color: "text-gray-900" },
-            { label: "Ticket Médio", value: `€${avgTicket.toFixed(2)}`, change: null, color: "text-gray-900" },
-            { label: `Receita ${period === "week" ? "7d" : period === "month" ? "30d" : "Total"}`, value: `€${totalRevenue.toFixed(2)}`, change: null, color: "text-[#187906]" },
+            { label: "Receita Hoje", value: `€${todayRevenue.toFixed(2)}`, change: revenueChange },
+            { label: "Pedidos Hoje", value: todayOrders.length.toString(), change: ordersChange },
+            { label: "Ticket Médio", value: `€${avgTicket.toFixed(2)}`, change: null },
+            { label: `Receita ${period === "week" ? "7d" : period === "month" ? "30d" : "Total"}`, value: `€${totalRevenue.toFixed(2)}`, change: null },
           ].map((kpi) => (
             <div key={kpi.label} className="rounded-xl border border-gray-200 bg-white p-4">
               <p className="text-xs text-gray-500">{kpi.label}</p>
-              <p className={`mt-1 text-2xl font-bold ${kpi.color}`}>{kpi.value}</p>
+              <p className="mt-1 text-2xl font-bold text-gray-900">{kpi.value}</p>
               {kpi.change !== null && (
                 <div className="mt-1 flex items-center gap-1">
                   {kpi.change >= 0 ? (
@@ -237,22 +203,12 @@ export default function PerformancePage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="hour" tick={{ fontSize: 9 }} stroke="#9CA3AF" />
                 <YAxis tick={{ fontSize: 10 }} stroke="#9CA3AF" />
-                <Tooltip
-                  contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12 }}
-                />
+                <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12 }} />
                 <Bar dataKey="orders" fill="#2CDF0C" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
-
-        {/* Empty state */}
-        {filtered.length === 0 && (
-          <div className="rounded-xl border border-gray-200 bg-white p-8 text-center">
-            <p className="text-sm text-gray-500">Sem dados de pedidos para este período.</p>
-            <p className="mt-1 text-xs text-gray-400">Os dados aparecem aqui quando tens pedidos nas plataformas.</p>
-          </div>
-        )}
       </div>
     </div>
   );

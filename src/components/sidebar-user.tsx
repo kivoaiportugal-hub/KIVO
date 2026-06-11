@@ -1,41 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/lib/auth/mock-auth";
+import { useData } from "@/lib/mock-data-provider";
 
 export function SidebarUser() {
-  const supabase = createClient();
-  const [name, setName] = useState("Utilizador");
-  const [restaurantName, setRestaurantName] = useState("");
-  const [plan, setPlan] = useState("start");
+  const { user } = useAuth();
+  const { restaurant } = useData();
 
-  useEffect(() => {
-    const loadUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        setName(
-          user.user_metadata?.full_name ||
-            user.user_metadata?.restaurant_name ||
-            user.email?.split("@")[0] ||
-            "Utilizador"
-        );
-        setRestaurantName(user.user_metadata?.restaurant_name || "");
-        setPlan(user.user_metadata?.onboarding_plan || "start");
-      }
-    };
-    loadUser();
-  }, []);
+  const name = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Utilizador";
+  const restaurantName = restaurant?.name || name;
+  const plan = restaurant?.plan || "grow";
 
   return (
     <div className="flex items-center gap-3 rounded-md px-3 py-2 text-sm">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#2CDF0C] text-xs font-bold text-white">
         {name.charAt(0).toUpperCase()}
       </div>
       <div className="flex-1 truncate">
-        <div className="font-medium truncate">{restaurantName || name}</div>
-        <div className="text-xs text-muted-foreground capitalize">
+        <div className="font-medium truncate">{restaurantName}</div>
+        <div className="text-xs text-gray-500 capitalize">
           Plano: {plan}
         </div>
       </div>

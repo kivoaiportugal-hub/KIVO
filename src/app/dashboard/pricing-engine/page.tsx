@@ -1,143 +1,95 @@
 "use client";
 
-import { useMenuItems, useRestaurant } from "@/hooks/use-data";
+import { useData } from "@/lib/mock-data-provider";
 import { useRouter } from "next/navigation";
 
-export default function PricingPage() {
-  const { restaurant } = useRestaurant();
-  const { items, loading } = useMenuItems(restaurant?.id);
+export default function PricingEnginePage() {
+  const { menuItems } = useData();
   const router = useRouter();
 
-  const handleApplyPricing = (itemName: string) => {
-    router.push("/dashboard/assistant");
-    sessionStorage.setItem(
-      "kivo_agent_context",
-      JSON.stringify({
-        action: "adjust_pricing",
-        message: `Quero ajustar o preço do item "${itemName}". Analisa o mercado e sugere o melhor preço.`,
-      })
-    );
-  };
-
-  if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-[#2CDF0C]" />
-      </div>
-    );
-  }
-
-  const suggestions = items
+  // Generate pricing suggestions based on mock data
+  const suggestions = menuItems
+    .filter((item) => item.price > 0 && item.cost > 0)
+    .slice(0, 5)
     .map((item) => {
-      const margin = item.margin_pct || 0;
-      let suggestedIncrease = 0;
-      let confidence = 0;
-
-      if (margin < 50) {
-        suggestedIncrease = 1.0;
-        confidence = 95;
-      } else if (margin < 60) {
-        suggestedIncrease = 0.5;
-        confidence = 88;
-      } else if (margin < 70) {
-        suggestedIncrease = 0.3;
-        confidence = 80;
-      } else {
-        suggestedIncrease = 0.15;
-        confidence = 65;
-      }
-
-      const suggestedPrice = (item.price || 0) + suggestedIncrease;
-      const monthlyImpact = suggestedIncrease * (item.orders_count || 0);
+      const currentMargin = ((item.price - item.cost) / item.price) * 100;
+      const targetMargin = 65;
+      const suggestedPrice = currentMargin < targetMargin
+        ? Math.round((item.cost / (1 - targetMargin / 100)) * 100) / 100
+        : Math.round(item.price * 1.05 * 100) / 100;
+      const diff = suggestedPrice - item.price;
+      const diffPct = (diff / item.price) * 100;
+      const monthlyImpact = Math.round(diff * (item.orders_count || 0) * 4 * 100) / 100;
 
       return {
         ...item,
         suggestedPrice,
-        suggestedIncrease,
-        confidence,
+        diff,
+        diffPct,
         monthlyImpact,
+        confidence: Math.min(95, 60 + Math.floor(Math.random() * 30)),
       };
-    })
-    .filter((s) => s.suggestedIncrease > 0)
-    .sort((a, b) => b.monthlyImpact - a.monthlyImpact);
-
-  const totalPotential = suggestions.reduce((s, i) => s + i.monthlyImpact, 0);
+    });
 
   return (
-    <div className="flex h-full flex-col p-6">
-      <div className="mb-4">
-        <h1 className="text-lg font-bold text-gray-900">Pricing</h1>
-        <p className="text-sm text-gray-500">Sugestões de otimização de preços</p>
-      </div>
-
-      {/* Summary */}
-      <div className="mb-4 rounded-xl border border-[#2CDF0C]/20 bg-[#2CDF0C]/5 p-4">
+    <div className="h-full overflow-y-auto p-6">
+      <div className="mx-auto max-w-3xl space-y-6">
         <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-gray-700">Potencial mensal extra</p>
-            <p className="text-2xl font-bold text-[#2CDF0C]">+€{totalPotential.toFixed(2)}</p>
-          </div>
-          <span className="text-3xl">💰</span>
+          <h1 className="text-lg font-bold text-gray-900">Pricing Engine</h1>
+          <button
+            onClick={() => {
+              sessionStorage.setItem("kivo_agent_context", JSON.stringify({
+                action: "pricing",
+                message: "Analisa os preços do meu menu e sugere ajustes.",
+              }));
+              router.push("/dashboard/assistant");
+            }}
+            className="rounded-lg bg-[#2CDF0C] px-4 py-2 text-sm font-medium text-white hover:bg-[#23b80a]"
+          >
+            Falar com Kivo
+          </button>
         </div>
-      </div>
 
-      {/* Suggestions table */}
-      <div className="flex-1 overflow-hidden rounded-xl border border-gray-200 bg-white">
-        <div className="h-full overflow-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="sticky top-0 border-b border-gray-100 bg-gray-50">
-              <tr>
-                <th className="px-4 py-2.5 font-medium text-gray-500">Item</th>
-                <th className="px-4 py-2.5 font-medium text-gray-500">Preço Atual</th>
-                <th className="px-4 py-2.5 font-medium text-gray-500">Preço Sugerido</th>
-                <th className="px-4 py-2.5 font-medium text-gray-500">Impacto €/mês</th>
-                <th className="px-4 py-2.5 font-medium text-gray-500">Confiança</th>
-                <th className="px-4 py-2.5 font-medium text-gray-500">Ação</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {suggestions.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50/50">
-                  <td className="px-4 py-2.5 font-medium text-gray-900">{item.name}</td>
-                  <td className="px-4 py-2.5 text-gray-500">€{(item.price || 0).toFixed(2)}</td>
-                  <td className="px-4 py-2.5 font-medium text-green-600">
-                    €{item.suggestedPrice.toFixed(2)}
-                  </td>
-                  <td className="px-4 py-2.5 font-medium text-green-600">
-                    +€{item.monthlyImpact.toFixed(2)}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <span
-                      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                        item.confidence >= 85
-                          ? "bg-green-100 text-green-700"
-                          : item.confidence >= 70
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-gray-100 text-gray-600"
-                      }`}
-                    >
-                      {item.confidence}%
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <button
-                      onClick={() => handleApplyPricing(item.name)}
-                      className="rounded-lg bg-[#2CDF0C] px-3 py-1 text-xs font-medium text-white hover:bg-[#23b80a]"
-                    >
-                      Aplicar via Kivo
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {suggestions.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
-                    Sem sugestões de preço. Adiciona itens ao menu primeiro.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className="space-y-4">
+          {suggestions.map((item) => (
+            <div key={item.id} className="rounded-xl border border-gray-200 bg-white p-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{item.name}</p>
+                  <p className="mt-1 text-xs text-gray-500">{item.category} · {item.orders_count} pedidos/mês</p>
+                </div>
+                <span className="rounded-full bg-[#2CDF0C]/10 px-2.5 py-0.5 text-xs font-medium text-[#187906]">
+                  {item.confidence}% confiança
+                </span>
+              </div>
+
+              <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
+                <div>
+                  <p className="text-xs text-gray-500">Preço atual</p>
+                  <p className="font-medium text-gray-900">€{item.price.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Preço sugerido</p>
+                  <p className="font-medium text-[#187906]">€{item.suggestedPrice.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Impacto mensal</p>
+                  <p className={`font-medium ${item.monthlyImpact >= 0 ? "text-green-600" : "text-red-500"}`}>
+                    {item.monthlyImpact >= 0 ? "+" : ""}€{item.monthlyImpact.toFixed(2)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <button className="rounded-lg bg-[#2CDF0C] px-4 py-2 text-xs font-medium text-white hover:bg-[#23b80a]">
+                  Aplicar via Kivo
+                </button>
+                <button className="rounded-lg border border-gray-200 px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50">
+                  Ignorar
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
